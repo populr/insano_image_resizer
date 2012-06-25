@@ -1,0 +1,199 @@
+require 'yaml'
+require 'shellwords'
+
+module ImageResizer
+  class Processor
+
+    include Configurable
+    include Shell
+    include Loggable
+    
+    def process(input_path, viewport_size = {}, interest_point = {})
+      input_properties = fetch_image_properties(input_path)
+      input_has_alpha = (input_properties["bands"] == 4)
+
+      output_tmp = Tempfile.new(["img", input_has_alpha ? ".png" : ".jpg"])
+
+      transform = calculate_transform(input_path, input_properties, viewport_size, interest_point)
+      run_transform(input_path, output_tmp.path, transform)
+
+      return output_tmp.path
+    end
+
+    def fetch_image_properties(input_path)
+      # read in the image headers to discover the width and height of the image.
+      # There's actually some extra metadata we ignore here, but this seems to be
+      # the only way to get width and height from VIPS.
+      result = run("vips im_printdesc '#{input_path}'")
+
+      # for some reason, the response isn't just YAML. It's one line of text in parenthesis 
+      # followed by YAML. Let's chop off the first line to get to the good stuff.
+      result = result[(result.index(')') + 2)..-1]
+      return YAML::load(result)
+    end
+
+    def calculate_transform(input_path, input_properties, viewport_size, interest_point)
+
+      # Pull out the properties we're interested in
+      image_size = {w: input_properties["width"].to_f, h: input_properties["height"].to_f}
+
+      # By default, the interest size is 30% of the total image size.
+      # In the future, this could be a parameter, and you'd pass the # of pixels around
+      # the POI you are interested in.
+      if (interest_point[:xf])
+        interest_point[:x] = image_size[:w] * interest_point[:xf]
+      end
+      
+      if (interest_point[:yf])
+        interest_point[:y] = image_size[:h] * interest_point[:yf]
+      end
+
+      if (interest_point[:radius] == nil)
+        interest_point[:radius] = 1
+      end
+
+      if (interest_point[:x] == nil)
+        interest_point[:x] = image_size[:w] * 0.5
+        interest_point[:radius] = 1
+      end
+      if (interest_point[:y] == nil)
+        interest_point[:y] = image_size[:h] * 0.5
+        interest_point[:radius] = 1
+      end
+
+      interest_size = {w: image_size[:w] * interest_point[:radius], h: image_size[:h] * interest_point[:radius]}
+
+      # Has the user specified both the width and the height of the viewport? If they haven't,
+      # let's go ahead and fill in the missing properties for them so that they get output at 
+      # the original aspect ratio of the image.
+      if ((viewport_size[:w] == nil) && (viewport_size[:h] == nil))
+        viewport_size = {w: input_properties["width"], h: input_properties["height"]}
+      
+      elsif (viewport_size[:w] == nil)
+        viewport_size[:w] = viewport_size[:h] * (input_properties["width"] / input_properties["height"])
+
+      elsif (viewport_size[:h] == nil)
+        viewport_size[:h] = viewport_size[:w] * (input_properties["height"] / input_properties["width"])
+      end
+
+      # how can we take our current image and fit it into the viewport? Time for
+      # some fun math! First, let's determine a scale such that the image fits
+      # within the viewport. There are a few rules we want to apply:
+      # 1) The image should _always_ fill the viewport.
+      # 2) The 1/3 of the image around the interest_point should always be visible.
+      #    This means that if we try to cram a massive image into a tiny viewport,
+      #    we won't get a simple scale-to-fill. We'll get a more zoomed-in version
+      #    showing just the 1/3 around the interest_point.
+
+      scale_to_fill = [viewport_size[:w] / image_size[:w], viewport_size[:h] / image_size[:h]].max
+      
+      scale_to_interest = [interest_size[:w] / image_size[:w], interest_size[:h] / image_size[:h]].max
+
+      log.debug("POI: ")
+      log.debug(interest_point)
+      log.debug("Image size: ")
+      log.debug(image_size)
+      log.debug("Requested viewport size: ")
+      log.debug(viewport_size)
+      log.debug("scale_to_fill: %f" % scale_to_fill)
+      log.debug("scale_to_interest: %f" % scale_to_interest)
+
+
+      scale_for_best_region = [scale_to_fill, scale_to_interest].max
+
+      # cool! Now, let's figure out what the content offset within the image should be.
+      # We want to keep the point of interest in view whenever possible. First, let's 
+      # compute an optimal frame around the POI:
+      best_region = {x: interest_point[:x].to_f - (image_size[:w] * scale_for_best_region) / 2, 
+                     y: interest_point[:y].to_f - (image_size[:h] * scale_for_best_region) / 2,
+                     w: image_size[:w] * scale_for_best_region,
+                     h: image_size[:h] * scale_for_best_region}
+      
+      # Up to this point, we've been using 'scale_for_best_region' to be the preferred scale of the image. 
+      # So, scale could be 1/3 if we want to show the area around the POI, or 1 if we're fitting a whole image
+      # in a viewport that is exactly the same aspect ratio.
+
+      # The next step is to compute a scale that should be applied to the image to make this desired section of 
+      # the image fit within the viewport. This is different from the previous scale—if we wanted to fit 1/3 of
+      # the image in a 100x100 pixel viewport, we computed best_region using that 1/3, and now we need to find
+      # the scale that will fit it into 100px.
+      scale = [scale_to_fill, viewport_size[:w] / best_region[:w], viewport_size[:h] / best_region[:h]].max
+
+      # Next, we scale the best_region so that it is in final coordinates. When we perform the affine transform, 
+      # it will SCALE the entire image and then CROP it to a region, so our transform rect needs to be in the 
+      # coordinate space of the SCALED image, not the initial image.
+      transform = {}
+      transform[:x] = best_region[:x] * scale
+      transform[:y] = best_region[:y] * scale
+      transform[:w] = best_region[:w] * scale
+      transform[:h] = best_region[:h] * scale
+      transform[:scale] = scale
+
+      # transform now represents the region we'd like to have in the final image. All of it, or part of it, may
+      # not actually be within the bounds of the image! We're about to apply some constraints, but first let's 
+      # trim the best_region so that it's the SHAPE of the viewport, not just the SCALE of the viewport. Remember,
+      # since the region is still centered around the POI, we can just trim equally on either the W or H as necessary.
+      transform[:x] -= (viewport_size[:w] - transform[:w]) / 2
+      transform[:y] -= (viewport_size[:h] - transform[:h]) / 2
+      transform[:w] = viewport_size[:w]
+      transform[:h] = viewport_size[:h]
+
+      # alright—now our transform most likely extends beyond the bounds of the image
+      # data. Let's add some constraints that push it within the bounds of the image.
+      if (transform[:x] + transform[:w] > image_size[:w] * scale)
+        transform[:x] = image_size[:w] * scale - transform[:w]
+      end
+
+      if (transform[:y] + transform[:h] > image_size[:h] * scale)
+        transform[:y] = image_size[:h] * scale - transform[:h]
+      end
+
+      if (transform[:x] < 0)
+        transform[:x] = 0.0
+      end
+
+      if (transform[:y] < 0)
+        transform[:y] = 0.0
+      end
+
+      log.debug("The transform properties:")
+      log.debug(transform)
+
+      return transform
+    end
+
+    def run_transform(input_path, output_path, transform)
+      # Call through to VIPS:
+      # int im_affinei(in, out, interpolate, a, b, c, d, dx, dy, x, y, w, h)
+      # The first six params are a transformation matrix. A and D are used for X and Y
+      # scale, the other two are b = Y skew and c = X skew.  TX and TY are translations
+      # but don't seem to be used.
+      # The last four params define a rect of the source image that is transformed.
+      log.debug(output_path[-3..-1])
+
+      if ((transform[:scale] < 0.5) && (output_path[-3..-1] == "jpg"))
+        scale = transform[:scale]
+        size = [transform[:w], transform[:h]].max
+
+        transform[:scale] = scale * 2
+        transform[:x] *= 2
+        transform[:y] *= 2
+        transform[:w] *= 2
+        transform[:h] *= 2
+
+
+        log.debug("Using two-pass transform")
+        run("vips im_affinei '#{input_path}' '#{output_path}' bilinear #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
+        run("vipsthumbnail -s #{size} --nosharpen -o '%s_thumb.jpg:65' '#{output_path}'")
+        FileUtils.mv(output_path[0..-5]+"_thumb.jpg", output_path)
+
+      else 
+        run("vips im_affinei '#{input_path}' '#{output_path}' bilinear #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
+
+      end
+
+      return output_path
+    end
+  end
+end
+
