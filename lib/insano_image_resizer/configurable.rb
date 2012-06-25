@@ -1,4 +1,4 @@
-module ImageResizer
+module InsanoImageResizer
   module Configurable
 
     # Exceptions

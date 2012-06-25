@@ -1,10 +1,10 @@
 require 'spec_helper'
 
 class Testoast
-  include ImageResizer::Loggable
+  include InsanoImageResizer::Loggable
 end
 
-describe ImageResizer::Loggable do
+describe InsanoImageResizer::Loggable do
 
   before(:each) do
     @object = Testoast.new

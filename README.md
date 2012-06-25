@@ -19,7 +19,7 @@ Usage
 
 In your Gemfile:
 
-    gem 'insano_resizer'
+    gem 'insano_image_resizer'
 
 Example:
 

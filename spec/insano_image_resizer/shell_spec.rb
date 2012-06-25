@@ -1,14 +1,14 @@
 require 'spec_helper'
 
-describe ImageResizer::Shell do
+describe InsanoImageResizer::Shell do
 
-  include ImageResizer::Shell
+  include InsanoImageResizer::Shell
 
   it "should raise an error if the identify command isn't found" do
     suppressing_stderr do
       lambda{
         run "non-existent-command"
-      }.should raise_error(ImageResizer::Shell::CommandFailed)
+      }.should raise_error(InsanoImageResizer::Shell::CommandFailed)
     end
   end
 

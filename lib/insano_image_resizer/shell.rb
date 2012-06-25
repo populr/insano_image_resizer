@@ -1,6 +1,6 @@
 require 'shellwords'
 
-module ImageResizer
+module InsanoImageResizer
   module Shell
 
     include Configurable

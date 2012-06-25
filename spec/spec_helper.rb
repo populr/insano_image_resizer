@@ -5,7 +5,7 @@ Bundler.setup(:default, :test)
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 require 'rspec'
-require 'image_resizer'
+require 'insano_image_resizer'
 require 'fileutils'
 require 'pry'
 require 'pry-nav'

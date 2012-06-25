@@ -1,7 +1,7 @@
 require 'yaml'
 require 'shellwords'
 
-module ImageResizer
+module InsanoImageResizer
   class Processor
 
     include Configurable

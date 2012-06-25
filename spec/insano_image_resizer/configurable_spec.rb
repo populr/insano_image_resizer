@@ -1,10 +1,10 @@
 require 'spec_helper'
 
-describe ImageResizer::Configurable do
+describe InsanoImageResizer::Configurable do
 
   before(:each) do
     class Car
-      include ImageResizer::Configurable
+      include InsanoImageResizer::Configurable
       configurable_attr :colour
       configurable_attr :top_speed, 216
       def self.other_thing=(thing); end
@@ -37,7 +37,7 @@ describe ImageResizer::Configurable do
 
     it "should allow specifying configurable attrs as strings" do
       class Bike
-        include ImageResizer::Configurable
+        include InsanoImageResizer::Configurable
         configurable_attr 'colour', 'rude'
       end
       Bike.new.colour.should == 'rude'
@@ -57,7 +57,7 @@ describe ImageResizer::Configurable do
         @car.configure do |c|
           c.other_thing = 5
         end
-      }.should raise_error(ImageResizer::Configurable::BadConfigAttribute)
+      }.should raise_error(InsanoImageResizer::Configurable::BadConfigAttribute)
     end
 
     it "should return itself" do
@@ -94,7 +94,7 @@ describe ImageResizer::Configurable do
       cow = @cow = mock('cow')
       class Lazy; end
       Lazy.class_eval do
-        include ImageResizer::Configurable
+        include InsanoImageResizer::Configurable
         configurable_attr(:sound){ cow.moo }
       end
       @lazy = Lazy.new
@@ -123,7 +123,7 @@ describe ImageResizer::Configurable do
 
     before(:each) do
       class ClassWithMethod
-        include ImageResizer::Configurable
+        include InsanoImageResizer::Configurable
         def add_thing(thing)
           'poo'
         end
@@ -148,7 +148,7 @@ describe ImageResizer::Configurable do
 
     before(:each) do
       class NestedThing
-        include ImageResizer::Configurable
+        include InsanoImageResizer::Configurable
         configurable_attr :age, 29
         def some_method(val)
           @some_thing = val
@@ -185,7 +185,7 @@ describe ImageResizer::Configurable do
         @car.configure do |c|
           c.some_method('other')
         end
-      }.to raise_error(ImageResizer::Configurable::BadConfigAttribute)
+      }.to raise_error(InsanoImageResizer::Configurable::BadConfigAttribute)
     end
   end
 
@@ -259,7 +259,7 @@ describe ImageResizer::Configurable do
   describe "falling back to another config" do
     before(:each) do
       class Garage
-        include ImageResizer::Configurable
+        include InsanoImageResizer::Configurable
         configurable_attr :top_speed, 100
       end
       @garage = Garage.new
@@ -316,7 +316,7 @@ describe ImageResizer::Configurable do
       before(:each) do
         @klass = Class.new
         @klass.class_eval do
-          include ImageResizer::Configurable
+          include InsanoImageResizer::Configurable
           configurable_attr :veg, 'carrot'
         end
         @a = @klass.new
@@ -353,11 +353,11 @@ describe ImageResizer::Configurable do
     describe "objects with different methods" do
       before(:each) do
         class Dad
-          include ImageResizer::Configurable
+          include InsanoImageResizer::Configurable
         end
         @dad = Dad.new
         class Kid
-          include ImageResizer::Configurable
+          include InsanoImageResizer::Configurable
           configurable_attr :lug, 'default-lug'
         end
         @kid = Kid.new
@@ -383,7 +383,7 @@ describe ImageResizer::Configurable do
 
       it "should work when a grandchild config is added later" do
         class Grandkid
-          include ImageResizer::Configurable
+          include InsanoImageResizer::Configurable
           configurable_attr :oogie, 'boogie'
         end
         grandkid = Grandkid.new
@@ -403,13 +403,13 @@ describe ImageResizer::Configurable do
       before(:each) do
         @mod = mod = Module.new
         @mod.module_eval do
-          include ImageResizer::Configurable
+          include InsanoImageResizer::Configurable
           configurable_attr :team, 'spurs'
         end
         @class = Class.new
         @class.class_eval do
           include mod
-          include ImageResizer::Configurable
+          include InsanoImageResizer::Configurable
           configurable_attr :tree, 'elm'
         end
       end
@@ -450,15 +450,15 @@ describe ImageResizer::Configurable do
   describe "inheriting configurable_attrs from multiple places" do
     before(:each) do
       module A
-        include ImageResizer::Configurable
+        include InsanoImageResizer::Configurable
         configurable_attr :a
       end
       module B
-        include ImageResizer::Configurable
+        include InsanoImageResizer::Configurable
         configurable_attr :b
       end
       class K
-        include ImageResizer::Configurable
+        include InsanoImageResizer::Configurable
         include A
         include B
         configurable_attr :c

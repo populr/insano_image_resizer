@@ -1,6 +1,6 @@
 require 'logger'
 
-module ImageResizer
+module InsanoImageResizer
   module Loggable
 
     def log
