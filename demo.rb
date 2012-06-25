@@ -5,8 +5,8 @@ require 'pry'
 require 'pry-nav'
 require 'pry-stack_explorer'
 
-input_path = 'samples/test.jpg'
+input_path = 'samples/test.png'
 
 processor = ImageResizer::Processor.new
-output_path = processor.process(input_path, {w: 100, h: 200}, {x:986, y:820})
-FileUtils.mv(output_path, 'samples/output/test.jpg')
+output_path = processor.process(input_path, {w: 100, h: 100}, {x:125, y:125, region:0.6})
+FileUtils.mv(output_path, 'samples/output/test.png')

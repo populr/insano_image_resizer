@@ -48,20 +48,20 @@ module ImageResizer
         interest_point[:y] = image_size[:h] * interest_point[:yf]
       end
 
-      if (interest_point[:radius] == nil)
-        interest_point[:radius] = 1
+      if (interest_point[:region] == nil)
+        interest_point[:region] = 1
       end
 
       if (interest_point[:x] == nil)
         interest_point[:x] = image_size[:w] * 0.5
-        interest_point[:radius] = 1
+        interest_point[:region] = 1
       end
       if (interest_point[:y] == nil)
         interest_point[:y] = image_size[:h] * 0.5
-        interest_point[:radius] = 1
+        interest_point[:region] = 1
       end
 
-      interest_size = {w: image_size[:w] * interest_point[:radius], h: image_size[:h] * interest_point[:radius]}
+      interest_size = {w: image_size[:w] * interest_point[:region], h: image_size[:h] * interest_point[:region]}
 
       # Has the user specified both the width and the height of the viewport? If they haven't,
       # let's go ahead and fill in the missing properties for them so that they get output at 
