@@ -25,9 +25,9 @@ module InsanoImageResizer
       # There's actually some extra metadata we ignore here, but this seems to be
       # the only way to get width and height from VIPS.
       result = {}
-      result[:w] = run("vips im_header_int Xsize '#{input_path}'").to_f
-      result[:h] = run("vips im_header_int Ysize '#{input_path}'").to_f
-      result[:bands] = run("vips im_header_int Bands '#{input_path}'").to_f
+      result[:w] = run("/usr/local/bin/vips im_header_int Xsize '#{input_path}'").to_f
+      result[:h] = run("/usr/local/bin/vips im_header_int Ysize '#{input_path}'").to_f
+      result[:bands] = run("/usr/local/bin/vips im_header_int Bands '#{input_path}'").to_f
       return result
     end
 
@@ -197,12 +197,12 @@ module InsanoImageResizer
         end
         intermediate_path = input_path[0..-4]+"_shrunk." + output_extension
 
-        run("vips im_shrink '#{input_path}' '#{intermediate_path}#{quality_extension}' #{shrink_factor} #{shrink_factor}")
-        run("vips im_affinei_all '#{intermediate_path}' '#{output_path}#{quality_extension}' bicubic #{transform[:scale]} 0 0 #{transform[:scale]} 0 0")
+        run("/usr/local/bin/vips im_shrink '#{input_path}' '#{intermediate_path}#{quality_extension}' #{shrink_factor} #{shrink_factor}")
+        run("/usr/local/bin/vips im_affine '#{intermediate_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
         FileUtils.rm(intermediate_path)
 
       else 
-        run("vips im_affinei '#{input_path}' '#{output_path}#{quality_extension}' bilinear #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
+        run("/usr/local/bin/vips im_affine '#{input_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
 
       end
 
