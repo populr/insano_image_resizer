@@ -25,6 +25,7 @@ Jeweler::Tasks.new do |gem|
   gem.email = "ben@populr.me"
   gem.authors = ["Ben Gotow"]
   # dependencies defined in Gemfile
+  gem.files = Dir['lib/**/*.rb'] + Dir['lib/*.rb'] + Dir['bin/*']
   gem.files.exclude 'spec'
   gem.files.exclude 'samples'
   gem.files.exclude 'tmp'

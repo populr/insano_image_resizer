@@ -8,14 +8,14 @@ module InsanoImageResizer
     include Shell
     include Loggable
     
-    def process(input_path, viewport_size = {}, interest_point = {})
+    def process(input_path, viewport_size = {}, interest_point = {}, quality = 60)
       input_properties = fetch_image_properties(input_path)
-      input_has_alpha = (input_properties["bands"] == 4)
+      input_has_alpha = (input_properties[:bands] == 4)
 
       output_tmp = Tempfile.new(["img", input_has_alpha ? ".png" : ".jpg"])
 
       transform = calculate_transform(input_path, input_properties, viewport_size, interest_point)
-      run_transform(input_path, output_tmp.path, transform)
+      run_transform(input_path, output_tmp.path, transform, quality)
 
       return output_tmp.path
     end
@@ -24,28 +24,24 @@ module InsanoImageResizer
       # read in the image headers to discover the width and height of the image.
       # There's actually some extra metadata we ignore here, but this seems to be
       # the only way to get width and height from VIPS.
-      result = run("vips im_printdesc '#{input_path}'")
-
-      # for some reason, the response isn't just YAML. It's one line of text in parenthesis 
-      # followed by YAML. Let's chop off the first line to get to the good stuff.
-      result = result[(result.index(')') + 2)..-1]
-      return YAML::load(result)
+      result = {}
+      result[:w] = run("vips im_header_int Xsize '#{input_path}'").to_f
+      result[:h] = run("vips im_header_int Ysize '#{input_path}'").to_f
+      result[:bands] = run("vips im_header_int Bands '#{input_path}'").to_f
+      return result
     end
 
     def calculate_transform(input_path, input_properties, viewport_size, interest_point)
-
-      # Pull out the properties we're interested in
-      image_size = {w: input_properties["width"].to_f, h: input_properties["height"].to_f}
 
       # By default, the interest size is 30% of the total image size.
       # In the future, this could be a parameter, and you'd pass the # of pixels around
       # the POI you are interested in.
       if (interest_point[:xf])
-        interest_point[:x] = image_size[:w] * interest_point[:xf]
+        interest_point[:x] = input_properties[:w] * interest_point[:xf]
       end
       
       if (interest_point[:yf])
-        interest_point[:y] = image_size[:h] * interest_point[:yf]
+        interest_point[:y] = input_properties[:h] * interest_point[:yf]
       end
 
       if (interest_point[:region] == nil)
@@ -53,27 +49,27 @@ module InsanoImageResizer
       end
 
       if (interest_point[:x] == nil)
-        interest_point[:x] = image_size[:w] * 0.5
+        interest_point[:x] = input_properties[:w] * 0.5
         interest_point[:region] = 1
       end
       if (interest_point[:y] == nil)
-        interest_point[:y] = image_size[:h] * 0.5
+        interest_point[:y] = input_properties[:h] * 0.5
         interest_point[:region] = 1
       end
 
-      interest_size = {w: image_size[:w] * interest_point[:region], h: image_size[:h] * interest_point[:region]}
+      interest_size = {w: input_properties[:w] * interest_point[:region], h: input_properties[:h] * interest_point[:region]}
 
       # Has the user specified both the width and the height of the viewport? If they haven't,
       # let's go ahead and fill in the missing properties for them so that they get output at 
       # the original aspect ratio of the image.
       if ((viewport_size[:w] == nil) && (viewport_size[:h] == nil))
-        viewport_size = {w: input_properties["width"], h: input_properties["height"]}
+        viewport_size = {w: input_properties[:w], h: input_properties[:h]}
       
       elsif (viewport_size[:w] == nil)
-        viewport_size[:w] = viewport_size[:h] * (input_properties["width"] / input_properties["height"])
+        viewport_size[:w] = (viewport_size[:h] * (input_properties[:w].to_f / input_properties[:h].to_f)).round
 
       elsif (viewport_size[:h] == nil)
-        viewport_size[:h] = viewport_size[:w] * (input_properties["height"] / input_properties["width"])
+        viewport_size[:h] = (viewport_size[:w] * (input_properties[:h].to_f / input_properties[:w].to_f)).round
       end
 
       # how can we take our current image and fit it into the viewport? Time for
@@ -85,14 +81,14 @@ module InsanoImageResizer
       #    we won't get a simple scale-to-fill. We'll get a more zoomed-in version
       #    showing just the 1/3 around the interest_point.
 
-      scale_to_fill = [viewport_size[:w] / image_size[:w], viewport_size[:h] / image_size[:h]].max
+      scale_to_fill = [viewport_size[:w] / input_properties[:w].to_f, viewport_size[:h] / input_properties[:h].to_f].max
       
-      scale_to_interest = [interest_size[:w] / image_size[:w], interest_size[:h] / image_size[:h]].max
+      scale_to_interest = [interest_size[:w] / input_properties[:w].to_f, interest_size[:h] / input_properties[:h].to_f].max
 
       log.debug("POI: ")
       log.debug(interest_point)
-      log.debug("Image size: ")
-      log.debug(image_size)
+      log.debug("Image properties: ")
+      log.debug(input_properties)
       log.debug("Requested viewport size: ")
       log.debug(viewport_size)
       log.debug("scale_to_fill: %f" % scale_to_fill)
@@ -104,10 +100,10 @@ module InsanoImageResizer
       # cool! Now, let's figure out what the content offset within the image should be.
       # We want to keep the point of interest in view whenever possible. First, let's 
       # compute an optimal frame around the POI:
-      best_region = {x: interest_point[:x].to_f - (image_size[:w] * scale_for_best_region) / 2, 
-                     y: interest_point[:y].to_f - (image_size[:h] * scale_for_best_region) / 2,
-                     w: image_size[:w] * scale_for_best_region,
-                     h: image_size[:h] * scale_for_best_region}
+      best_region = {x: interest_point[:x].to_f - (input_properties[:w].to_f * scale_for_best_region) / 2, 
+                     y: interest_point[:y].to_f - (input_properties[:h].to_f * scale_for_best_region) / 2,
+                     w: input_properties[:w].to_f * scale_for_best_region,
+                     h: input_properties[:h].to_f * scale_for_best_region}
       
       # Up to this point, we've been using 'scale_for_best_region' to be the preferred scale of the image. 
       # So, scale could be 1/3 if we want to show the area around the POI, or 1 if we're fitting a whole image
@@ -117,7 +113,7 @@ module InsanoImageResizer
       # the image fit within the viewport. This is different from the previous scale—if we wanted to fit 1/3 of
       # the image in a 100x100 pixel viewport, we computed best_region using that 1/3, and now we need to find
       # the scale that will fit it into 100px.
-      scale = [scale_to_fill, viewport_size[:w] / best_region[:w], viewport_size[:h] / best_region[:h]].max
+      scale = [scale_to_fill, viewport_size[:w].to_f / best_region[:w], viewport_size[:h].to_f / best_region[:h]].max
 
       # Next, we scale the best_region so that it is in final coordinates. When we perform the affine transform, 
       # it will SCALE the entire image and then CROP it to a region, so our transform rect needs to be in the 
@@ -140,12 +136,12 @@ module InsanoImageResizer
 
       # alright—now our transform most likely extends beyond the bounds of the image
       # data. Let's add some constraints that push it within the bounds of the image.
-      if (transform[:x] + transform[:w] > image_size[:w] * scale)
-        transform[:x] = image_size[:w] * scale - transform[:w]
+      if (transform[:x] + transform[:w] > input_properties[:w].to_f * scale)
+        transform[:x] = input_properties[:w].to_f * scale - transform[:w]
       end
 
-      if (transform[:y] + transform[:h] > image_size[:h] * scale)
-        transform[:y] = image_size[:h] * scale - transform[:h]
+      if (transform[:y] + transform[:h] > input_properties[:h].to_f * scale)
+        transform[:y] = input_properties[:h].to_f * scale - transform[:h]
       end
 
       if (transform[:x] < 0)
@@ -162,33 +158,51 @@ module InsanoImageResizer
       return transform
     end
 
-    def run_transform(input_path, output_path, transform)
+    def run_transform(input_path, output_path, transform, quality = 60)
       # Call through to VIPS:
       # int im_affinei(in, out, interpolate, a, b, c, d, dx, dy, x, y, w, h)
       # The first six params are a transformation matrix. A and D are used for X and Y
       # scale, the other two are b = Y skew and c = X skew.  TX and TY are translations
       # but don't seem to be used.
       # The last four params define a rect of the source image that is transformed.
-      log.debug(output_path[-3..-1])
+      output_extension = output_path[-3..-1]
+      quality_extension = ""
 
-      if ((transform[:scale] < 0.5) && (output_path[-3..-1] == "jpg"))
-        scale = transform[:scale]
-        size = [transform[:w], transform[:h]].max
+      if (output_extension == "jpg")
+        quality_extension = ":#{quality}"
+      end
+      
+      if (transform[:scale] < 0.5)
+        # If we're shrinking the image by more than a factor of two, let's do a two-pass operation. The reason we do this 
+        # is that the interpolators, such as bilinear and bicubic, don't produce very good results when scaling an image
+        # by more than 1/2. Instead, we use a high-speed shrinking function to reduce the image by the smallest integer scale
+        # greater than the desired scale, and then go the rest of the way with an interpolated affine transform.
+        shrink_factor = (1.0 / transform[:scale]).floor
 
-        transform[:scale] = scale * 2
-        transform[:x] *= 2
-        transform[:y] *= 2
-        transform[:w] *= 2
-        transform[:h] *= 2
+        # To ensure that we actually do both passes, don't let the im_shrink go all the way. This will result in terrible
+        # looking shrunken images, since im_shrink basically just cuts pixels out.
+        if (shrink_factor == 1.0 / transform[:scale])
+          shrink_factor -= 1
+        end
 
+        transform[:scale] *= shrink_factor
+        transform[:x] *= shrink_factor
+        transform[:y] *= shrink_factor
+        transform[:w] *= shrink_factor
+        transform[:h] *= shrink_factor
 
-        log.debug("Using two-pass transform")
-        run("vips im_affinei '#{input_path}' '#{output_path}' bilinear #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
-        run("vipsthumbnail -s #{size} --nosharpen -o '%s_thumb.jpg:65' '#{output_path}'")
-        FileUtils.mv(output_path[0..-5]+"_thumb.jpg", output_path)
+        if (input_path[-4..-3] != ".")
+          FileUtils.mv(input_path, input_path+"."+output_extension)
+          input_path = input_path + "." + output_extension
+        end
+        intermediate_path = input_path[0..-4]+"_shrunk." + output_extension
+
+        run("vips im_shrink '#{input_path}' '#{intermediate_path}#{quality_extension}' #{shrink_factor} #{shrink_factor}")
+        run("vips im_affinei_all '#{intermediate_path}' '#{output_path}#{quality_extension}' bicubic #{transform[:scale]} 0 0 #{transform[:scale]} 0 0")
+        FileUtils.rm(intermediate_path)
 
       else 
-        run("vips im_affinei '#{input_path}' '#{output_path}' bilinear #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
+        run("vips im_affinei '#{input_path}' '#{output_path}#{quality_extension}' bilinear #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
 
       end
 

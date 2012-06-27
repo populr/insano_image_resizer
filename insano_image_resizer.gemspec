@@ -5,11 +5,11 @@
 
 Gem::Specification.new do |s|
   s.name = "insano_image_resizer"
-  s.version = "0.3.1"
+  s.version = "0.3.4"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Ben Gotow"]
-  s.date = "2012-06-25"
+  s.date = "2012-06-27"
   s.description = "An image resizing gem that generates smaller versions of requested \n                    images. Calls through to VIPS on the command line to perform processing,\n                    and automatically handles cropping and scaling the requested image, taking\n                    a point of interest into account if requested."
   s.email = "ben@populr.me"
   s.extra_rdoc_files = [
@@ -17,18 +17,11 @@ Gem::Specification.new do |s|
     "README.md"
   ]
   s.files = [
-    ".rspec",
-    ".rvmrc",
-    "Gemfile",
-    "Gemfile.lock",
-    "LICENSE",
-    "README.md",
-    "Rakefile",
-    "VERSION",
-    "samples/explanation.png",
-    "samples/test.jpg",
-    "samples/test.png",
-    "spec/spec_helper.rb"
+    "lib/insano_image_resizer.rb",
+    "lib/insano_image_resizer/configurable.rb",
+    "lib/insano_image_resizer/loggable.rb",
+    "lib/insano_image_resizer/processor.rb",
+    "lib/insano_image_resizer/shell.rb"
   ]
   s.homepage = "http://github.com/populr/insano_image_resizer"
   s.licenses = ["MIT"]
