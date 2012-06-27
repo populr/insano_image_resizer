@@ -8,6 +8,10 @@ module InsanoImageResizer
     include Shell
     include Loggable
     
+    def initialize(options = {vips_path: "vips"})
+      @vips_path = options[:vips_path]
+    end
+
     def process(input_path, viewport_size = {}, interest_point = {}, quality = 60)
       input_properties = fetch_image_properties(input_path)
       input_has_alpha = (input_properties[:bands] == 4)
@@ -25,9 +29,9 @@ module InsanoImageResizer
       # There's actually some extra metadata we ignore here, but this seems to be
       # the only way to get width and height from VIPS.
       result = {}
-      result[:w] = run("/usr/local/bin/vips im_header_int Xsize '#{input_path}'").to_f
-      result[:h] = run("/usr/local/bin/vips im_header_int Ysize '#{input_path}'").to_f
-      result[:bands] = run("/usr/local/bin/vips im_header_int Bands '#{input_path}'").to_f
+      result[:w] = run("#{@vips_path} im_header_int Xsize '#{input_path}'").to_f
+      result[:h] = run("#{@vips_path} im_header_int Ysize '#{input_path}'").to_f
+      result[:bands] = run("#{@vips_path} im_header_int Bands '#{input_path}'").to_f
       return result
     end
 
@@ -197,12 +201,12 @@ module InsanoImageResizer
         end
         intermediate_path = input_path[0..-4]+"_shrunk." + output_extension
 
-        run("/usr/local/bin/vips im_shrink '#{input_path}' '#{intermediate_path}#{quality_extension}' #{shrink_factor} #{shrink_factor}")
-        run("/usr/local/bin/vips im_affine '#{intermediate_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
+        run("#{@vips_path} im_shrink '#{input_path}' '#{intermediate_path}#{quality_extension}' #{shrink_factor} #{shrink_factor}")
+        run("#{@vips_path} im_affine '#{intermediate_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
         FileUtils.rm(intermediate_path)
 
       else 
-        run("/usr/local/bin/vips im_affine '#{input_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
+        run("#{@vips_path} im_affine '#{input_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
 
       end
 
