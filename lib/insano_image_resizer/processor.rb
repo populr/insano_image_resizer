@@ -190,10 +190,6 @@ module InsanoImageResizer
         end
 
         transform[:scale] *= shrink_factor
-        transform[:x] *= shrink_factor
-        transform[:y] *= shrink_factor
-        transform[:w] *= shrink_factor
-        transform[:h] *= shrink_factor
 
         if (input_path[-4..-3] != ".")
           FileUtils.mv(input_path, input_path+"."+output_extension)
@@ -207,7 +203,6 @@ module InsanoImageResizer
 
       else 
         run("#{@vips_path} im_affine '#{input_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
-
       end
 
       return output_path
