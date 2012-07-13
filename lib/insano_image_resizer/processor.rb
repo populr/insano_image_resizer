@@ -204,7 +204,8 @@ module InsanoImageResizer
       else 
         run("#{@vips_path} im_affine '#{input_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
       end
-
+      
+      FileUtils.rm(input_path)
       return output_path
     end
   end
