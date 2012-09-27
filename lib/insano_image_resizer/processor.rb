@@ -134,8 +134,11 @@ module InsanoImageResizer
       # since the region is still centered around the POI, we can just trim equally on either the W or H as necessary.
       transform[:x] -= (viewport_size[:w] - transform[:w]) / 2
       transform[:y] -= (viewport_size[:h] - transform[:h]) / 2
-      transform[:w] = viewport_size[:w].floor
-      transform[:h] = viewport_size[:h].floor
+      transform[:w] = viewport_size[:w]
+      transform[:h] = viewport_size[:h]
+
+      transform[:x] = transform[:x].round
+      transform[:y] = transform[:y].round
 
       # alright—now our transform most likely extends beyond the bounds of the image
       # data. Let's add some constraints that push it within the bounds of the image.
