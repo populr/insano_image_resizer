@@ -7,7 +7,7 @@ module InsanoImageResizer
     include Configurable
     include Shell
     include Loggable
-    
+
     def initialize(options = {vips_path: "vips"})
       @vips_path = options[:vips_path]
     end
@@ -43,7 +43,7 @@ module InsanoImageResizer
       if (interest_point[:xf])
         interest_point[:x] = input_properties[:w] * interest_point[:xf]
       end
-      
+
       if (interest_point[:yf])
         interest_point[:y] = input_properties[:h] * interest_point[:yf]
       end
@@ -64,16 +64,16 @@ module InsanoImageResizer
       interest_size = {w: input_properties[:w] * interest_point[:region], h: input_properties[:h] * interest_point[:region]}
 
       # Has the user specified both the width and the height of the viewport? If they haven't,
-      # let's go ahead and fill in the missing properties for them so that they get output at 
+      # let's go ahead and fill in the missing properties for them so that they get output at
       # the original aspect ratio of the image.
       if ((viewport_size[:w] == nil) && (viewport_size[:h] == nil))
         viewport_size = {w: input_properties[:w], h: input_properties[:h]}
-      
+
       elsif (viewport_size[:w] == nil)
-        viewport_size[:w] = (viewport_size[:h] * (input_properties[:w].to_f / input_properties[:h].to_f)).round
+        viewport_size[:w] = (viewport_size[:h] * (input_properties[:w].to_f / input_properties[:h].to_f))
 
       elsif (viewport_size[:h] == nil)
-        viewport_size[:h] = (viewport_size[:w] * (input_properties[:h].to_f / input_properties[:w].to_f)).round
+        viewport_size[:h] = (viewport_size[:w] * (input_properties[:h].to_f / input_properties[:w].to_f))
       end
 
       # how can we take our current image and fit it into the viewport? Time for
@@ -86,7 +86,6 @@ module InsanoImageResizer
       #    showing just the 1/3 around the interest_point.
 
       scale_to_fill = [viewport_size[:w] / input_properties[:w].to_f, viewport_size[:h] / input_properties[:h].to_f].max
-      
       scale_to_interest = [interest_size[:w] / input_properties[:w].to_f, interest_size[:h] / input_properties[:h].to_f].max
 
       log.debug("POI: ")
@@ -102,25 +101,25 @@ module InsanoImageResizer
       scale_for_best_region = [scale_to_fill, scale_to_interest].max
 
       # cool! Now, let's figure out what the content offset within the image should be.
-      # We want to keep the point of interest in view whenever possible. First, let's 
+      # We want to keep the point of interest in view whenever possible. First, let's
       # compute an optimal frame around the POI:
-      best_region = {x: interest_point[:x].to_f - (input_properties[:w].to_f * scale_for_best_region) / 2, 
+      best_region = {x: interest_point[:x].to_f - (input_properties[:w].to_f * scale_for_best_region) / 2,
                      y: interest_point[:y].to_f - (input_properties[:h].to_f * scale_for_best_region) / 2,
                      w: input_properties[:w].to_f * scale_for_best_region,
                      h: input_properties[:h].to_f * scale_for_best_region}
-      
-      # Up to this point, we've been using 'scale_for_best_region' to be the preferred scale of the image. 
+
+      # Up to this point, we've been using 'scale_for_best_region' to be the preferred scale of the image.
       # So, scale could be 1/3 if we want to show the area around the POI, or 1 if we're fitting a whole image
       # in a viewport that is exactly the same aspect ratio.
 
-      # The next step is to compute a scale that should be applied to the image to make this desired section of 
+      # The next step is to compute a scale that should be applied to the image to make this desired section of
       # the image fit within the viewport. This is different from the previous scale—if we wanted to fit 1/3 of
       # the image in a 100x100 pixel viewport, we computed best_region using that 1/3, and now we need to find
       # the scale that will fit it into 100px.
       scale = [scale_to_fill, viewport_size[:w].to_f / best_region[:w], viewport_size[:h].to_f / best_region[:h]].max
 
-      # Next, we scale the best_region so that it is in final coordinates. When we perform the affine transform, 
-      # it will SCALE the entire image and then CROP it to a region, so our transform rect needs to be in the 
+      # Next, we scale the best_region so that it is in final coordinates. When we perform the affine transform,
+      # it will SCALE the entire image and then CROP it to a region, so our transform rect needs to be in the
       # coordinate space of the SCALED image, not the initial image.
       transform = {}
       transform[:x] = best_region[:x] * scale
@@ -130,13 +129,13 @@ module InsanoImageResizer
       transform[:scale] = scale
 
       # transform now represents the region we'd like to have in the final image. All of it, or part of it, may
-      # not actually be within the bounds of the image! We're about to apply some constraints, but first let's 
+      # not actually be within the bounds of the image! We're about to apply some constraints, but first let's
       # trim the best_region so that it's the SHAPE of the viewport, not just the SCALE of the viewport. Remember,
       # since the region is still centered around the POI, we can just trim equally on either the W or H as necessary.
       transform[:x] -= (viewport_size[:w] - transform[:w]) / 2
       transform[:y] -= (viewport_size[:h] - transform[:h]) / 2
-      transform[:w] = viewport_size[:w]
-      transform[:h] = viewport_size[:h]
+      transform[:w] = viewport_size[:w].floor
+      transform[:h] = viewport_size[:h].floor
 
       # alright—now our transform most likely extends beyond the bounds of the image
       # data. Let's add some constraints that push it within the bounds of the image.
@@ -162,7 +161,7 @@ module InsanoImageResizer
       return transform
     end
 
-    def run_transform(input_path, output_path, transform, quality = 60)
+    def run_transform(input_path, output_path, transform, quality = 90)
       # Call through to VIPS:
       # int im_affinei(in, out, interpolate, a, b, c, d, dx, dy, x, y, w, h)
       # The first six params are a transformation matrix. A and D are used for X and Y
@@ -175,9 +174,9 @@ module InsanoImageResizer
       if (output_extension == "jpg")
         quality_extension = ":#{quality}"
       end
-      
+
       if (transform[:scale] < 0.5)
-        # If we're shrinking the image by more than a factor of two, let's do a two-pass operation. The reason we do this 
+        # If we're shrinking the image by more than a factor of two, let's do a two-pass operation. The reason we do this
         # is that the interpolators, such as bilinear and bicubic, don't produce very good results when scaling an image
         # by more than 1/2. Instead, we use a high-speed shrinking function to reduce the image by the smallest integer scale
         # greater than the desired scale, and then go the rest of the way with an interpolated affine transform.
@@ -201,10 +200,10 @@ module InsanoImageResizer
         run("#{@vips_path} im_affine '#{intermediate_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
         FileUtils.rm(intermediate_path)
 
-      else 
+      else
         run("#{@vips_path} im_affine '#{input_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
       end
-      
+
       FileUtils.rm(input_path)
       return output_path
     end
