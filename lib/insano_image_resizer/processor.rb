@@ -1,5 +1,6 @@
 require 'yaml'
 require 'shellwords'
+require 'exifr'
 
 module InsanoImageResizer
   class Processor
@@ -205,6 +206,27 @@ module InsanoImageResizer
 
       else
         run("#{@vips_path} im_affine '#{input_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
+      end
+
+      # find the EXIF values
+      orientation = 0
+      if input_path[-3..-1] == 'jpg'
+        orientation = EXIFR::JPEG.new(input_path).orientation.to_i
+      end
+      log.debug('Orientation flag: ' + orientation.to_s)
+
+      if orientation == 3 || orientation == 6 || orientation == 8
+        FileUtils.mv(output_path, intermediate_path)
+        o_transform = []
+        if orientation == 3
+          run("#{@vips_path} im_rot180 '#{intermediate_path}' '#{output_path}#{quality_extension}'")
+        elsif orientation == 6
+          run("#{@vips_path} im_rot90 '#{intermediate_path}' '#{output_path}#{quality_extension}'")
+        elsif orientation == 8
+          run("#{@vips_path} im_rot270 '#{intermediate_path}' '#{output_path}#{quality_extension}'")
+        end
+        FileUtils.rm(intermediate_path)
+        run("mogrify -strip #{output_path}")
       end
 
       FileUtils.rm(input_path)
