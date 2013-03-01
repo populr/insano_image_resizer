@@ -9,7 +9,7 @@ module InsanoImageResizer
     include Loggable
     include Cocaine
 
-    def initialize(options = {vips_path: "/usr/local/Cellar/vips/7.30.2/bin/vips"})
+    def initialize(options = { vips_path: 'vips' })
       @vips_path = options[:vips_path]
     end
 
@@ -194,20 +194,20 @@ module InsanoImageResizer
         end
         intermediate_path = input_path[0..-4]+"_shrunk." + output_extension
 
-        line = Cocaine::CommandLine.new(@vips_path, "im_shrink :input :intermediate_path :shrink_factor shrink_factor")
+        line = Cocaine::CommandLine.new(@vips_path, "im_shrink :input :intermediate_path :shrink_factor :shrink_factor")
         line.run(:input => input_path,
                  :intermediate_path => "#{intermediate_path}#{quality_extension}",
-                 :shrink_factor => shrink_factor)
+                 :shrink_factor => shrink_factor.to_s)
 
 
         line = Cocaine::CommandLine.new(@vips_path, "im_affine :intermediate_path :output :scale 0 0 :scale 0 0 :x :y :w :h")
         line.run(:output => "#{output_path}#{quality_extension}",
                  :intermediate_path => intermediate_path,
-                 :scale => transform[:scale],
-                 :x => transform[:x],
-                 :y => transform[:y],
-                 :w => transform[:w],
-                 :h => transform[:h])
+                 :scale => transform[:scale].to_s,
+                 :x => transform[:x].to_s,
+                 :y => transform[:y].to_s,
+                 :w => transform[:w].to_s,
+                 :h => transform[:h].to_s)
 
         FileUtils.rm(intermediate_path)
 
@@ -215,11 +215,11 @@ module InsanoImageResizer
         line = Cocaine::CommandLine.new(@vips_path, "im_affine :input :output :scale 0 0 :scale 0 0 :x :y :w :h")
         line.run(:output => "#{output_path}#{quality_extension}",
                  :input => input_path,
-                 :scale => transform[:scale],
-                 :x => transform[:x],
-                 :y => transform[:y],
-                 :w => transform[:w],
-                 :h => transform[:h])
+                 :scale => transform[:scale].to_s,
+                 :x => transform[:x].to_s,
+                 :y => transform[:y].to_s,
+                 :w => transform[:w].to_s,
+                 :h => transform[:h].to_s)
       end
 
       # find the EXIF values
