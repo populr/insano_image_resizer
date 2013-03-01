@@ -7,7 +7,7 @@ in the frame when possible. The resizer is built on top of the VIPS command-line
 and is designed to be as fast as possible. In our tests, VIPS is faster than ImageMagick for any
 image larger than ~300x300px, and is exponentially faster for very large images.
 
-![A brief overview of the Insano processing function](insano_image_resizer/raw/master/samples/explanation.png)
+![A brief overview of the Insano processing function](insano_image_resizer/blob/master/samples/explanation.png)
 
 Output formats: The Insano image resizer will keep PNGs as PNG, but any other format is converted to JPEG
 
