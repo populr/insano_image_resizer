@@ -9,7 +9,7 @@ module InsanoImageResizer
     include Loggable
     include Cocaine
 
-    def initialize(options = {vips_path: "/usr/local/Cellar/vips/7.30.2/bin/vips"})
+    def initialize(options = { vips_path: 'vips' })
       @vips_path = options[:vips_path]
     end
 
