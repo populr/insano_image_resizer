@@ -9,8 +9,7 @@ image larger than ~300x300px, and is exponentially faster for very large images.
 
 ![A brief overview of the Insano processing function](insano_image_resizer/raw/master/samples/explanation.png)
 
-Output formats: The Insano image resizer will produce either a PNG or JPG image, depending
-on whether the source image includes transparency.
+Output formats: The Insano image resizer will keep PNGs as PNG, but any other format is converted to JPEG
 
 * Insano is the fastest waterslide in the world. This isn't a waterslide, but it's similarly fast.
 
@@ -27,7 +26,7 @@ Example:
     input_path = 'samples/test.jpg'
 
     # Create a new instance of the Image processor
-    processor = ImageResizer::Processor.new
+    processor = ImageResizer::Processor.new(:vips_path => 'path_to_vips[defaults to vips]', :identify_path => 'path_to_ImageMagick_identify[defaults to identify]')
 
     # Process the image, creating a temporary file.
     output_path = processor.process(input_path, {w: 100, h: 200}, {x:986, y:820, region: 0.5})

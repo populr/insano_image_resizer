@@ -9,51 +9,41 @@ module InsanoImageResizer
     include Loggable
     include Cocaine
 
-    def initialize(options = { vips_path: 'vips' })
+    def initialize(options = { :vips_path => 'vips', :identify_path => 'identify' })
       @vips_path = options[:vips_path]
+      @identify_path = options[:identify_path]
     end
 
     def process(input_path, viewport_size = {}, interest_point = {}, quality = 60)
-      input_properties = fetch_image_properties(input_path)
-      input_has_alpha = (input_properties[:bands] == 4)
+      width, height, original_format, target_extension = fetch_image_properties(input_path)
 
-      output_tmp = Tempfile.new(["img", input_has_alpha ? ".png" : ".jpg"])
+      output_tmp = Tempfile.new
 
-      transform = calculate_transform(input_path, input_properties, viewport_size, interest_point)
-      run_transform(input_path, output_tmp.path, transform, quality)
+      transform = calculate_transform(input_path, width, height, viewport_size, interest_point)
+      run_transform(input_path, output_tmp.path, transform, original_format, target_extension, quality)
 
       output_tmp.path
     end
 
+    private
+
     def fetch_image_properties(input_path)
-      # read in the image headers to discover the width and height of the image.
-      # There's actually some extra metadata we ignore here, but this seems to be
-      # the only way to get width and height from VIPS.
-      result = {}
-
-      line = Cocaine::CommandLine.new(@vips_path, 'im_header_int Xsize :input')
-      result[:w] = line.run(:input => input_path).to_f
-
-      line = Cocaine::CommandLine.new(@vips_path, 'im_header_int Ysize :input')
-      result[:h] = line.run(:input => input_path).to_f
-
-      line = Cocaine::CommandLine.new(@vips_path, 'im_header_int Bands :input')
-      result[:bands] = line.run(:input => input_path).to_f
-
-      result
+      line = Cocaine::CommandLine.new(@identify_path, '-format "%w %h %m" :input')
+      parts = line.run(:input => input_path).split(' ')
+      [parts[0].to_i, parts[1].to_i, parts[2], parts[2] == 'PNG' ? 'png' : 'jpg']
     end
 
-    def calculate_transform(input_path, input_properties, viewport_size, interest_point)
+    def calculate_transform(input_path, width, height, viewport_size, interest_point)
 
       # By default, the interest size is 30% of the total image size.
       # In the future, this could be a parameter, and you'd pass the # of pixels around
       # the POI you are interested in.
       if (interest_point[:xf])
-        interest_point[:x] = input_properties[:w] * interest_point[:xf]
+        interest_point[:x] = width * interest_point[:xf]
       end
 
       if (interest_point[:yf])
-        interest_point[:y] = input_properties[:h] * interest_point[:yf]
+        interest_point[:y] = height * interest_point[:yf]
       end
 
       if (interest_point[:region] == nil)
@@ -61,27 +51,27 @@ module InsanoImageResizer
       end
 
       if (interest_point[:x] == nil)
-        interest_point[:x] = input_properties[:w] * 0.5
+        interest_point[:x] = width * 0.5
         interest_point[:region] = 1
       end
       if (interest_point[:y] == nil)
-        interest_point[:y] = input_properties[:h] * 0.5
+        interest_point[:y] = height * 0.5
         interest_point[:region] = 1
       end
 
-      interest_size = {w: input_properties[:w] * interest_point[:region], h: input_properties[:h] * interest_point[:region]}
+      interest_size = {w: width * interest_point[:region], h: height * interest_point[:region]}
 
       # Has the user specified both the width and the height of the viewport? If they haven't,
       # let's go ahead and fill in the missing properties for them so that they get output at
       # the original aspect ratio of the image.
       if ((viewport_size[:w] == nil) && (viewport_size[:h] == nil))
-        viewport_size = {w: input_properties[:w], h: input_properties[:h]}
+        viewport_size = {w: width, h: height}
 
       elsif (viewport_size[:w] == nil)
-        viewport_size[:w] = (viewport_size[:h] * (input_properties[:w].to_f / input_properties[:h].to_f))
+        viewport_size[:w] = (viewport_size[:h] * (width.to_f / height.to_f))
 
       elsif (viewport_size[:h] == nil)
-        viewport_size[:h] = (viewport_size[:w] * (input_properties[:h].to_f / input_properties[:w].to_f))
+        viewport_size[:h] = (viewport_size[:w] * (height.to_f / width.to_f))
       end
 
       # how can we take our current image and fit it into the viewport? Time for
@@ -93,18 +83,18 @@ module InsanoImageResizer
       #    we won't get a simple scale-to-fill. We'll get a more zoomed-in version
       #    showing just the 1/3 around the interest_point.
 
-      scale_to_fill = [viewport_size[:w] / input_properties[:w].to_f, viewport_size[:h] / input_properties[:h].to_f].max
-      scale_to_interest = [interest_size[:w] / input_properties[:w].to_f, interest_size[:h] / input_properties[:h].to_f].max
+      scale_to_fill = [viewport_size[:w] / width.to_f, viewport_size[:h] / height.to_f].max
+      scale_to_interest = [interest_size[:w] / width.to_f, interest_size[:h] / height.to_f].max
 
       scale_for_best_region = [scale_to_fill, scale_to_interest].max
 
       # cool! Now, let's figure out what the content offset within the image should be.
       # We want to keep the point of interest in view whenever possible. First, let's
       # compute an optimal frame around the POI:
-      best_region = {x: interest_point[:x].to_f - (input_properties[:w].to_f * scale_for_best_region) / 2,
-                     y: interest_point[:y].to_f - (input_properties[:h].to_f * scale_for_best_region) / 2,
-                     w: input_properties[:w].to_f * scale_for_best_region,
-                     h: input_properties[:h].to_f * scale_for_best_region}
+      best_region = {x: interest_point[:x].to_f - (width.to_f * scale_for_best_region) / 2,
+                     y: interest_point[:y].to_f - (height.to_f * scale_for_best_region) / 2,
+                     w: width.to_f * scale_for_best_region,
+                     h: height.to_f * scale_for_best_region}
 
       # Up to this point, we've been using 'scale_for_best_region' to be the preferred scale of the image.
       # So, scale could be 1/3 if we want to show the area around the POI, or 1 if we're fitting a whole image
@@ -140,12 +130,12 @@ module InsanoImageResizer
 
       # alright—now our transform most likely extends beyond the bounds of the image
       # data. Let's add some constraints that push it within the bounds of the image.
-      if (transform[:x] + transform[:w] > input_properties[:w].to_f * scale)
-        transform[:x] = input_properties[:w].to_f * scale - transform[:w]
+      if (transform[:x] + transform[:w] > width.to_f * scale)
+        transform[:x] = width.to_f * scale - transform[:w]
       end
 
-      if (transform[:y] + transform[:h] > input_properties[:h].to_f * scale)
-        transform[:y] = input_properties[:h].to_f * scale - transform[:h]
+      if (transform[:y] + transform[:h] > height.to_f * scale)
+        transform[:y] = height.to_f * scale - transform[:h]
       end
 
       if (transform[:x] < 0)
@@ -159,19 +149,16 @@ module InsanoImageResizer
       transform
     end
 
-    def run_transform(input_path, output_path, transform, quality = 90)
+    def run_transform(input_path, output_path, transform, original_format, output_extension, quality)
       # Call through to VIPS:
       # int im_affinei(in, out, interpolate, a, b, c, d, dx, dy, x, y, w, h)
       # The first six params are a transformation matrix. A and D are used for X and Y
       # scale, the other two are b = Y skew and c = X skew.  TX and TY are translations
       # but don't seem to be used.
       # The last four params define a rect of the source image that is transformed.
-      output_extension = output_path[-3..-1]
-      quality_extension = ""
 
-      if (output_extension == "jpg")
-        quality_extension = ":#{quality}"
-      end
+      quality_extension = ''
+      quality_extension = ":#{quality}" if output_extension == 'jpg'
 
       if (transform[:scale] < 0.5)
         # If we're shrinking the image by more than a factor of two, let's do a two-pass operation. The reason we do this
@@ -224,9 +211,7 @@ module InsanoImageResizer
 
       # find the EXIF values
       orientation = 0
-      if input_path[-3..-1] == 'jpg'
-        orientation = EXIFR::JPEG.new(input_path).orientation.to_i
-      end
+      orientation = EXIFR::JPEG.new(input_path).orientation.to_i if original_format == 'JPEG'
 
       if orientation == 3 || orientation == 6 || orientation == 8
         FileUtils.mv(output_path, intermediate_path)

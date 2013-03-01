@@ -76,73 +76,77 @@ describe InsanoImageResizer::Processor do
   before(:each) do
     @source_jpg_path = SAMPLES_DIR.join('test.jpg').to_s # 3872, 2592
     @source_png_path = SAMPLES_DIR.join('test.png').to_s # 177, 180
-    @source_jpg_props = {};
-    @source_jpg_props[:w] = 3800
-    @source_jpg_props[:h] = 2500
-    @source_jpg_props[:bands] = 3
+    @source_non_transparent_png_path = SAMPLES_DIR.join('non_transparent.png').to_s # 177, 180
+    @source_gif_path = SAMPLES_DIR.join('test.gif').to_s
+    @source_jpg_width = 3800
+    @source_jpg_height = 2500
 
 
     @processor = InsanoImageResizer::Processor.new
   end
 
   describe "fetch_image_properties" do
+    it "should return width, height, original_format, and target extension" do
+      width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_jpg_path)
+      width.should == @source_jpg_width
+      height.should == @source_jpg_height
+      original_format.should == 'JPEG'
+      target_extension.should == 'jpg'
 
-    it "should return a hash of properties containing width and height" do
-      properties = @processor.fetch_image_properties(@source_jpg_path)
-      properties[:w].should == @source_jpg_props[:w]
-      properties[:h].should == @source_jpg_props[:h]
+      width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_png_path)
+      original_format.should == 'PNG'
+      target_extension.should == 'png'
+
+      width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_non_transparent_png_path)
+      original_format.should == 'PNG'
+      target_extension.should == 'png'
     end
 
-    it "should return a hash of properties containing depth (JPG=3)" do
-      properties = @processor.fetch_image_properties(@source_jpg_path)
-      properties[:bands].should == 3
+    it "should return an extension of jpg for all non-png formats" do
+      width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_gif_path)
+      target_extension.should == 'jpg'
     end
+  end
 
-    it "should return a hash of properties containing depth (PNG=4)" do
-      properties = @processor.fetch_image_properties(@source_png_path)
-      properties[:bands].should == 4
-    end
+  describe "calculate_transform" do
+    it "should produce the correct transform for each viewport" do
+      expected_abs_index = 0
 
-    describe "calculate_transform" do
-      it "should produce the correct transform for each viewport" do
-        expected_abs_index = 0
+      interest_variants_absolute.each do |ip|
+        viewport_variants.each do |viewport|
+          expected = expected_results[expected_abs_index]
+          expected_abs_index += 1
 
-        interest_variants_absolute.each do |ip|
-          viewport_variants.each do |viewport|
-            expected = expected_results[expected_abs_index]
-            expected_abs_index += 1
+          actual = @processor.send(:calculate_transform, @source_jpg_path, @source_jpg_width, @source_jpg_height, viewport, ip)
 
-            actual = @processor.calculate_transform(@source_jpg_path, @source_jpg_props, viewport, ip)
-
-            actual[:x].should be_within(0.5).of(expected[:x])
-            actual[:y].should be_within(0.5).of(expected[:y])
-            actual[:w].should be_within(0.5).of(expected[:w])
-            actual[:h].should be_within(0.5).of(expected[:h])
-            actual[:scale].should be_within(0.5).of(expected[:scale])
-          end
+          actual[:x].should be_within(0.5).of(expected[:x])
+          actual[:y].should be_within(0.5).of(expected[:y])
+          actual[:w].should be_within(0.5).of(expected[:w])
+          actual[:h].should be_within(0.5).of(expected[:h])
+          actual[:scale].should be_within(0.5).of(expected[:scale])
         end
       end
-
-      it "should produce the correct transform for each viewport with fractional variants" do
-        expected_fraction_index = 0
-
-        interest_variants_fractional.each do |ip|
-          viewport_variants.each do |viewport|
-            expected = expected_results[expected_fraction_index]
-            expected_fraction_index += 1
-
-            actual = @processor.calculate_transform(@source_jpg_path, @source_jpg_props, viewport, ip)
-
-            actual[:x].should be_within(0.5).of(expected[:x])
-            actual[:y].should be_within(0.5).of(expected[:y])
-            actual[:w].should be_within(0.5).of(expected[:w])
-            actual[:h].should be_within(0.5).of(expected[:h])
-            actual[:scale].should be_within(0.5).of(expected[:scale])
-          end
-
-        end
-      end
-
     end
+
+    it "should produce the correct transform for each viewport with fractional variants" do
+      expected_fraction_index = 0
+
+      interest_variants_fractional.each do |ip|
+        viewport_variants.each do |viewport|
+          expected = expected_results[expected_fraction_index]
+          expected_fraction_index += 1
+
+          actual = @processor.send(:calculate_transform, @source_jpg_path, @source_jpg_width, @source_jpg_height, viewport, ip)
+
+          actual[:x].should be_within(0.5).of(expected[:x])
+          actual[:y].should be_within(0.5).of(expected[:y])
+          actual[:w].should be_within(0.5).of(expected[:w])
+          actual[:h].should be_within(0.5).of(expected[:h])
+          actual[:scale].should be_within(0.5).of(expected[:scale])
+        end
+
+      end
+    end
+
   end
 end
