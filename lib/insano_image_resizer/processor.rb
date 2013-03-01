@@ -17,7 +17,7 @@ module InsanoImageResizer
     def process(input_path, viewport_size = {}, interest_point = {}, quality = 60)
       width, height, original_format, target_extension = fetch_image_properties(input_path)
 
-      output_tmp = Tempfile.new
+      output_tmp = Tempfile.new(['img', ".#{target_extension}"])
 
       transform = calculate_transform(input_path, width, height, viewport_size, interest_point)
       run_transform(input_path, output_tmp.path, transform, original_format, target_extension, quality)
