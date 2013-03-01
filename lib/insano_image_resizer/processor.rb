@@ -215,7 +215,7 @@ module InsanoImageResizer
         line = Cocaine::CommandLine.new(@vips_path, "im_affine :input :output :scale 0 0 :scale 0 0 :x :y :w :h")
         line.run(:output => "#{output_path}#{quality_extension}",
                  :input => input_path,
-                 :scale => transform[:scale],
+                 :scale => transform[:scale].to_s,
                  :x => transform[:x].to_s,
                  :y => transform[:y].to_s,
                  :w => transform[:w].to_s,
