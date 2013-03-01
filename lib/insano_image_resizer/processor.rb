@@ -9,9 +9,9 @@ module InsanoImageResizer
     include Loggable
     include Cocaine
 
-    def initialize(options = { :vips_path => 'vips', :identify_path => 'identify' })
-      @vips_path = options[:vips_path]
-      @identify_path = options[:identify_path]
+    def initialize(options = {})
+      @vips_path = options[:vips_path] || 'vips'
+      @identify_path = options[:identify_path] || 'identify'
     end
 
     def process(input_path, viewport_size = {}, interest_point = {}, quality = 60)
