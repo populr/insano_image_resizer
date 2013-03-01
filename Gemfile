@@ -1,4 +1,6 @@
-source :rubygems
+source 'https://rubygems.org'
+
+gem 'cocaine'
 
 group :development, :test do
   gem 'rspec'

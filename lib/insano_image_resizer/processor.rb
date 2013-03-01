@@ -1,15 +1,15 @@
 require 'yaml'
-require 'shellwords'
 require 'exifr'
+require 'cocaine'
 
 module InsanoImageResizer
   class Processor
 
     include Configurable
-    include Shell
     include Loggable
+    include Cocaine
 
-    def initialize(options = {vips_path: "vips"})
+    def initialize(options = {vips_path: "/usr/local/Cellar/vips/7.30.2/bin/vips"})
       @vips_path = options[:vips_path]
     end
 
@@ -22,7 +22,7 @@ module InsanoImageResizer
       transform = calculate_transform(input_path, input_properties, viewport_size, interest_point)
       run_transform(input_path, output_tmp.path, transform, quality)
 
-      return output_tmp.path
+      output_tmp.path
     end
 
     def fetch_image_properties(input_path)
@@ -30,10 +30,17 @@ module InsanoImageResizer
       # There's actually some extra metadata we ignore here, but this seems to be
       # the only way to get width and height from VIPS.
       result = {}
-      result[:w] = run("#{@vips_path} im_header_int Xsize '#{input_path}'").to_f
-      result[:h] = run("#{@vips_path} im_header_int Ysize '#{input_path}'").to_f
-      result[:bands] = run("#{@vips_path} im_header_int Bands '#{input_path}'").to_f
-      return result
+
+      line = Cocaine::CommandLine.new(@vips_path, 'im_header_int Xsize :input')
+      result[:w] = line.run(:input => input_path).to_f
+
+      line = Cocaine::CommandLine.new(@vips_path, 'im_header_int Ysize :input')
+      result[:h] = line.run(:input => input_path).to_f
+
+      line = Cocaine::CommandLine.new(@vips_path, 'im_header_int Bands :input')
+      result[:bands] = line.run(:input => input_path).to_f
+
+      result
     end
 
     def calculate_transform(input_path, input_properties, viewport_size, interest_point)
@@ -88,16 +95,6 @@ module InsanoImageResizer
 
       scale_to_fill = [viewport_size[:w] / input_properties[:w].to_f, viewport_size[:h] / input_properties[:h].to_f].max
       scale_to_interest = [interest_size[:w] / input_properties[:w].to_f, interest_size[:h] / input_properties[:h].to_f].max
-
-      log.debug("POI: ")
-      log.debug(interest_point)
-      log.debug("Image properties: ")
-      log.debug(input_properties)
-      log.debug("Requested viewport size: ")
-      log.debug(viewport_size)
-      log.debug("scale_to_fill: %f" % scale_to_fill)
-      log.debug("scale_to_interest: %f" % scale_to_interest)
-
 
       scale_for_best_region = [scale_to_fill, scale_to_interest].max
 
@@ -159,10 +156,7 @@ module InsanoImageResizer
         transform[:y] = 0.0
       end
 
-      log.debug("The transform properties:")
-      log.debug(transform)
-
-      return transform
+      transform
     end
 
     def run_transform(input_path, output_path, transform, quality = 90)
@@ -200,12 +194,32 @@ module InsanoImageResizer
         end
         intermediate_path = input_path[0..-4]+"_shrunk." + output_extension
 
-        run("#{@vips_path} im_shrink '#{input_path}' '#{intermediate_path}#{quality_extension}' #{shrink_factor} #{shrink_factor}")
-        run("#{@vips_path} im_affine '#{intermediate_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
+        line = Cocaine::CommandLine.new(@vips_path, "im_shrink :input :intermediate_path :shrink_factor shrink_factor")
+        line.run(:input => input_path,
+                 :intermediate_path => "#{intermediate_path}#{quality_extension}",
+                 :shrink_factor => shrink_factor)
+
+
+        line = Cocaine::CommandLine.new(@vips_path, "im_affine :intermediate_path :output :scale 0 0 :scale 0 0 :x :y :w :h")
+        line.run(:output => "#{output_path}#{quality_extension}",
+                 :intermediate_path => intermediate_path,
+                 :scale => transform[:scale],
+                 :x => transform[:x],
+                 :y => transform[:y],
+                 :w => transform[:w],
+                 :h => transform[:h])
+
         FileUtils.rm(intermediate_path)
 
       else
-        run("#{@vips_path} im_affine '#{input_path}' '#{output_path}#{quality_extension}' #{transform[:scale]} 0 0 #{transform[:scale]} 0 0 #{transform[:x]} #{transform[:y]} #{transform[:w]} #{transform[:h]}")
+        line = Cocaine::CommandLine.new(@vips_path, "im_affine :input :output :scale 0 0 :scale 0 0 :x :y :w :h")
+        line.run(:output => "#{output_path}#{quality_extension}",
+                 :input => input_path,
+                 :scale => transform[:scale],
+                 :x => transform[:x],
+                 :y => transform[:y],
+                 :w => transform[:w],
+                 :h => transform[:h])
       end
 
       # find the EXIF values
@@ -213,24 +227,36 @@ module InsanoImageResizer
       if input_path[-3..-1] == 'jpg'
         orientation = EXIFR::JPEG.new(input_path).orientation.to_i
       end
-      log.debug('Orientation flag: ' + orientation.to_s)
 
       if orientation == 3 || orientation == 6 || orientation == 8
         FileUtils.mv(output_path, intermediate_path)
         o_transform = []
         if orientation == 3
-          run("#{@vips_path} im_rot180 '#{intermediate_path}' '#{output_path}#{quality_extension}'")
+          command = 'im_rot180'
         elsif orientation == 6
-          run("#{@vips_path} im_rot90 '#{intermediate_path}' '#{output_path}#{quality_extension}'")
+          command = 'im_rot90'
         elsif orientation == 8
-          run("#{@vips_path} im_rot270 '#{intermediate_path}' '#{output_path}#{quality_extension}'")
+          command = 'im_rot270'
+        else
+          command = nil
         end
+
+        if command
+          line = Cocaine::CommandLine.new(@vips_path, ":command :intermediate_path :output")
+          line.run(:output => "#{output_path}#{quality_extension}",
+                   :intermediate_path => intermediate_path,
+                   :command => command)
+        end
+
         FileUtils.rm(intermediate_path)
-        run("mogrify -strip #{output_path}")
+        line = Cocaine::CommandLine.new(mogrify, "-strip :output")
+        line.run(:output => output_path,
+                 :intermediate_path => intermediate_path)
       end
 
       FileUtils.rm(input_path)
-      return output_path
+
+      output_path
     end
   end
 end

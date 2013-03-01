@@ -39,15 +39,15 @@ module InsanoImageResizer
       def has_config_method?(method_name)
         config_methods.include?(method_name.to_sym)
       end
-      
+
       def configuration
         @configuration ||= {}
       end
-            
+
       def config_methods
         @config_methods ||= self.class.config_methods.dup
       end
-      
+
       def default_configuration
         @default_configuration ||= self.class.default_configuration.dup
       end
@@ -57,7 +57,7 @@ module InsanoImageResizer
         child_configurables.each{|c| c.set_if_unset(key, value) }
         value
       end
-      
+
       def use_as_fallback_config(other_configurable)
         other_configurable.add_child_configurable(self)
         self.fallback_configurable = other_configurable
@@ -76,17 +76,17 @@ module InsanoImageResizer
       end
 
       private
-      
+
       attr_accessor :fallback_configurable
-      
+
       def child_configurables
         @child_configurables ||= []
       end
-      
+
       def set_locally?(key)
         instance_variable_defined?("@#{key}")
       end
-      
+
       def default_value(key)
         if default_configuration[key].is_a?(DeferredBlock)
           default_configuration[key] = default_configuration[key].call
@@ -129,7 +129,7 @@ module InsanoImageResizer
         @nested_configurables ||= []
       end
 
-      def register_configuration(name, config=nil, &config_in_block) 
+      def register_configuration(name, config=nil, &config_in_block)
         saved_configs[name] = config_in_block || config
       end
 
@@ -164,7 +164,7 @@ module InsanoImageResizer
       def configuration_method(*method_names)
         config_methods.push(*method_names.map{|n| n.to_sym }).uniq!
       end
-      
+
       def nested_configurable(*method_names)
         nested_configurables.push(*method_names)
       end
