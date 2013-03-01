@@ -194,7 +194,7 @@ module InsanoImageResizer
         end
         intermediate_path = input_path[0..-4]+"_shrunk." + output_extension
 
-        line = Cocaine::CommandLine.new(@vips_path, "im_shrink :input :intermediate_path :shrink_factor shrink_factor")
+        line = Cocaine::CommandLine.new(@vips_path, "im_shrink :input :intermediate_path :shrink_factor :shrink_factor")
         line.run(:input => input_path,
                  :intermediate_path => "#{intermediate_path}#{quality_extension}",
                  :shrink_factor => shrink_factor.to_s)
