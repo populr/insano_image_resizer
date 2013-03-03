@@ -14,8 +14,8 @@ module InsanoImageResizer
       @identify_path = options[:identify_path] || 'identify'
     end
 
-    def process(input_path, viewport_size = {}, interest_point = {}, quality = 60)
-      width, height, original_format, target_extension = fetch_image_properties(input_path)
+    def process(input_path, viewport_size = {}, interest_point = {}, default_quality = 75)
+      width, height, quality, original_format, target_extension = fetch_image_properties(input_path, default_quality)
 
       output_tmp = Tempfile.new(['img', ".#{target_extension}"])
 
@@ -27,10 +27,20 @@ module InsanoImageResizer
 
     private
 
-    def fetch_image_properties(input_path)
-      line = Cocaine::CommandLine.new(@identify_path, '-format "%w %h %m" :input')
-      parts = line.run(:input => input_path).split(' ')
-      [parts[0].to_i, parts[1].to_i, parts[2], parts[2] == 'PNG' ? 'png' : 'jpg']
+    def fetch_image_properties(input_path, default_quality)
+      line = Cocaine::CommandLine.new(@identify_path, '-format "%w %h %Q %m" :input')
+      width, height, quality, original_format = line.run(:input => input_path).split(' ')
+
+      case original_format
+      when 'PNG'
+        target_extension = 'png'
+      when 'JPEG'
+        target_extension = 'jpg'
+      else
+        target_extension = 'jpg'
+        quality = default_quality
+      end
+      [width.to_i, height.to_i, quality.to_i, original_format, target_extension]
     end
 
     def calculate_transform(input_path, width, height, viewport_size, interest_point)

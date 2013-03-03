@@ -86,25 +86,37 @@ describe InsanoImageResizer::Processor do
   end
 
   describe "fetch_image_properties" do
-    it "should return width, height, original_format, and target extension" do
-      width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_jpg_path)
-      width.should == @source_jpg_width
-      height.should == @source_jpg_height
-      original_format.should == 'JPEG'
-      target_extension.should == 'jpg'
-
-      width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_png_path)
-      original_format.should == 'PNG'
-      target_extension.should == 'png'
-
-      width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_non_transparent_png_path)
-      original_format.should == 'PNG'
-      target_extension.should == 'png'
+    context "when the image source is a JPEG" do
+      it "should return width, height, quality of the source jpeg, JPEG as the original format, and jpg as the target extension" do
+        width, height, quality, original_format, target_extension = @processor.send(:fetch_image_properties, @source_jpg_path, 90)
+        width.should == @source_jpg_width
+        height.should == @source_jpg_height
+        quality.should == 91
+        original_format.should == 'JPEG'
+        target_extension.should == 'jpg'
+      end
     end
 
-    it "should return an extension of jpg for all non-png formats" do
-      width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_gif_path)
-      target_extension.should == 'jpg'
+    context "when the image source is a PNG" do
+      it "should return width, height, 0 as the quality, PNG as the original format, and png as the target extension" do
+        width, height, quality, original_format, target_extension = @processor.send(:fetch_image_properties, @source_png_path, 90)
+        quality.should == 0
+        original_format.should == 'PNG'
+        target_extension.should == 'png'
+
+        width, height, quality, original_format, target_extension = @processor.send(:fetch_image_properties, @source_non_transparent_png_path, 90)
+        quality.should == 0
+        original_format.should == 'PNG'
+        target_extension.should == 'png'
+      end
+    end
+
+    context "when the image source is not JPEG or PNG" do
+      it "should return width, height, quality argument as the quality, the original format (eg: GIF16) as the original format, and jpg as the target extension" do
+        width, height, quality, original_format, target_extension = @processor.send(:fetch_image_properties, @source_gif_path, 90)
+        quality.should == 90
+        target_extension.should == 'jpg'
+      end
     end
   end
 
