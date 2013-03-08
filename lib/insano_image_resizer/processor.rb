@@ -26,7 +26,7 @@ module InsanoImageResizer
       output_tmp = Tempfile.new(['img', ".#{target_extension}"])
 
       transform = calculate_transform(input_path, width, height, viewport_size, interest_point)
-      quality = ((target_extension == 'png') ? nil : target_jpg_quality(transform[:w], transform[:h], quality_limits))
+      quality = target_jpg_quality(transform[:w], transform[:h], quality_limits) if target_extension == 'jpg'
       run_transform(input_path, output_tmp.path, transform, original_format, target_extension, quality)
 
       output_tmp.path
@@ -183,16 +183,7 @@ module InsanoImageResizer
       # but don't seem to be used.
       # The last four params define a rect of the source image that is transformed.
 
-      intermediate_path = "#{input_path}_shrunk.#{output_extension}"
-
-      if quality
-        intermediate_quality_extension = ':90'
-        quality_extension = ":#{quality}"
-      else
-        intermediate_quality_extension = ''
-        quality_extension = ''
-      end
-
+      quality_extension = quality ? ":#{quality}" : ''
 
       if (transform[:scale] < 0.5)
         # If we're shrinking the image by more than a factor of two, let's do a two-pass operation. The reason we do this
@@ -203,11 +194,13 @@ module InsanoImageResizer
 
         # To ensure that we actually do both passes, don't let the im_shrink go all the way. This will result in terrible
         # looking shrunken images, since im_shrink basically just cuts pixels out.
-        if (shrink_factor == 1.0 / transform[:scale])
-          shrink_factor -= 1
-        end
+        shrink_factor -= 1 if shrink_factor == 1.0 / transform[:scale]
 
         transform[:scale] *= shrink_factor
+
+
+        intermediate_path = "#{input_path}_shrunk.#{output_extension}"
+        intermediate_quality_extension = quality ? ":90" : ''
 
 
         line = Cocaine::CommandLine.new(@vips_path, "im_shrink :input :intermediate_path :shrink_factor :shrink_factor")
@@ -254,31 +247,30 @@ module InsanoImageResizer
         command = 'im_rot180'
       elsif orientation == 6
         command = 'im_rot90'
-        swap_dimensions = true
+        return_value = :swap_dimensions
       elsif orientation == 8
         command = 'im_rot270'
-        swap_dimensions = true
+        return_value = :swap_dimensions
       else
         return
       end
 
-      FileUtils.mv(output_path, input_path)
+      intermediate_path = "#{input_path}_rotated.jpg"
+      intermediate_quality_extension = ':90'
 
-      if command
-        line = Cocaine::CommandLine.new(@vips_path, ":command :input :output")
-        line.run(:input => input_path,
-                 :output => "#{output_path}#{quality_extension}",
-                 :command => command)
-      end
+      line = Cocaine::CommandLine.new(@vips_path, ":command :input :intermediate_path")
+      line.run(:input => input_path,
+               :intermediate_path => "#{intermediate_path}#{intermediate_quality_extension}",
+               :command => command)
 
       # mogrify strips the EXIF tags so that browsers that support EXIF don't rotate again after
       # we have rotated
-      line = Cocaine::CommandLine.new('mogrify', "-strip :output")
-      line.run(:output => output_path)
+      line = Cocaine::CommandLine.new('mogrify', "-strip :intermediate_path")
+      line.run(:intermediate_path => intermediate_path)
 
-      FileUtils.rm(input_path)
-      :swap_dimensions if swap_dimensions
+      FileUtils.mv(intermediate_path, input_path)
 
+      return_value
     end
 
   end
