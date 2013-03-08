@@ -9,38 +9,50 @@ module InsanoImageResizer
     include Loggable
     include Cocaine
 
+    DEFAULT_QUALITY_LIMITS = { :min_area => { :area => 4000, :quality => 95 },
+                               :max_area => { :area => 1000000, :quality => 60 }}
+
     def initialize(options = {})
       @vips_path = options[:vips_path] || 'vips'
       @identify_path = options[:identify_path] || 'identify'
     end
 
-    def process(input_path, viewport_size = {}, interest_point = {}, default_quality = 75)
-      width, height, quality, original_format, target_extension = fetch_image_properties(input_path, default_quality)
+    def process(input_path, viewport_size = {}, interest_point = {}, quality_limits=DEFAULT_QUALITY_LIMITS)
+      width, height, original_format, target_extension = fetch_image_properties(input_path)
 
       output_tmp = Tempfile.new(['img', ".#{target_extension}"])
 
       transform = calculate_transform(input_path, width, height, viewport_size, interest_point)
+      quality = ((target_extension == 'png') ? nil : target_jpg_quality(transform[:w], transform[:h], quality_limits))
       run_transform(input_path, output_tmp.path, transform, original_format, target_extension, quality)
 
       output_tmp.path
     end
 
+    # limits is of the form:
+    # { :min_area => { :area => 4000, :quality => 95 },
+    #   :max_area => { :area => 1000000, :quality => 60 }}
+    def target_jpg_quality(width, height, limits)
+      min_area = limits[:min_area][:area]
+      min_area_quality = limits[:min_area][:quality]
+      max_area = limits[:max_area][:area]
+      max_area_quality = limits[:max_area][:quality]
+      normalized_target_area = [width * height - min_area, 0].max
+      normalized_max_area =  max_area - min_area
+      target_area_fraction = [normalized_target_area.to_f / normalized_max_area, 1].min
+      quality_span = min_area_quality - max_area_quality
+      quality_fraction = quality_span * target_area_fraction
+      min_area_quality - quality_fraction
+    end
+
     private
 
-    def fetch_image_properties(input_path, default_quality)
-      line = Cocaine::CommandLine.new(@identify_path, '-format "%w %h %Q %m" :input')
-      width, height, quality, original_format = line.run(:input => input_path).split(' ')
+    def fetch_image_properties(input_path)
+      line = Cocaine::CommandLine.new(@identify_path, '-format "%w %h %m" :input')
+      width, height, original_format = line.run(:input => input_path).split(' ')
 
-      case original_format
-      when 'PNG'
-        target_extension = 'png'
-      when 'JPEG'
-        target_extension = 'jpg'
-      else
-        target_extension = 'jpg'
-        quality = default_quality
-      end
-      [width.to_i, height.to_i, quality.to_i, original_format, target_extension]
+      target_extension = (original_format == 'PNG' ? 'png' : 'jpg')
+      [width.to_i, height.to_i, original_format, target_extension]
     end
 
     def calculate_transform(input_path, width, height, viewport_size, interest_point)
@@ -167,8 +179,49 @@ module InsanoImageResizer
       # but don't seem to be used.
       # The last four params define a rect of the source image that is transformed.
 
-      quality_extension = ''
-      quality_extension = ":#{quality}" if output_extension == 'jpg'
+      intermediate_path = "#{input_path}_shrunk.#{output_extension}"
+
+      if quality
+        intermediate_quality_extension = ':90'
+        quality_extension = ":#{quality}"
+      else
+        intermediate_quality_extension = ''
+        quality_extension = ''
+      end
+
+
+      # find the EXIF values
+      orientation = 0
+      orientation = EXIFR::JPEG.new(input_path).orientation.to_i if original_format == 'JPEG'
+
+      if orientation == 3 || orientation == 6 || orientation == 8
+        o_transform = []
+        if orientation == 3
+          command = 'im_rot180'
+        elsif orientation == 6
+          command = 'im_rot90'
+        elsif orientation == 8
+          command = 'im_rot270'
+        else
+          command = nil
+        end
+
+        if command
+          line = Cocaine::CommandLine.new(@vips_path, ":command :input :intermediate_path")
+          line.run(:input => input_path,
+                   :intermediate_path => "#{intermediate_path}#{intermediate_quality_extension}",
+                   :command => command)
+        end
+
+        # mogrify strips the EXIF tags so that browsers that support EXIF don't rotate again after
+        # we have rotated
+        line = Cocaine::CommandLine.new('mogrify', "-strip :intermediate_path")
+        line.run(:intermediate_path => intermediate_path)
+
+        FileUtils.rm(input_path)
+        FileUtils.mv(intermediate_path, input_path)
+      end
+
 
       if (transform[:scale] < 0.5)
         # If we're shrinking the image by more than a factor of two, let's do a two-pass operation. The reason we do this
@@ -185,15 +238,10 @@ module InsanoImageResizer
 
         transform[:scale] *= shrink_factor
 
-        if (input_path[-4..-3] != ".")
-          FileUtils.mv(input_path, input_path+"."+output_extension)
-          input_path = input_path + "." + output_extension
-        end
-        intermediate_path = input_path[0..-4]+"_shrunk." + output_extension
 
         line = Cocaine::CommandLine.new(@vips_path, "im_shrink :input :intermediate_path :shrink_factor :shrink_factor")
         line.run(:input => input_path,
-                 :intermediate_path => "#{intermediate_path}#{quality_extension}",
+                 :intermediate_path => "#{intermediate_path}#{intermediate_quality_extension}",
                  :shrink_factor => shrink_factor.to_s)
 
 
@@ -217,36 +265,6 @@ module InsanoImageResizer
                  :y => transform[:y].to_s,
                  :w => transform[:w].to_s,
                  :h => transform[:h].to_s)
-      end
-
-      # find the EXIF values
-      orientation = 0
-      orientation = EXIFR::JPEG.new(input_path).orientation.to_i if original_format == 'JPEG'
-
-      if orientation == 3 || orientation == 6 || orientation == 8
-        FileUtils.mv(output_path, intermediate_path)
-        o_transform = []
-        if orientation == 3
-          command = 'im_rot180'
-        elsif orientation == 6
-          command = 'im_rot90'
-        elsif orientation == 8
-          command = 'im_rot270'
-        else
-          command = nil
-        end
-
-        if command
-          line = Cocaine::CommandLine.new(@vips_path, ":command :intermediate_path :output")
-          line.run(:output => "#{output_path}#{quality_extension}",
-                   :intermediate_path => intermediate_path,
-                   :command => command)
-        end
-
-        FileUtils.rm(intermediate_path)
-        line = Cocaine::CommandLine.new(mogrify, "-strip :output")
-        line.run(:output => output_path,
-                 :intermediate_path => intermediate_path)
       end
 
       FileUtils.rm(input_path)

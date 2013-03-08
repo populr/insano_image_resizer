@@ -85,42 +85,115 @@ describe InsanoImageResizer::Processor do
     @processor = InsanoImageResizer::Processor.new
   end
 
-  describe "fetch_image_properties" do
+  describe "#process" do
+    before(:each) do
+      @processor.stub(:fetch_image_properties).and_return([640, 480, 'GIF16', 'jpg'])
+      @processor.stub(:calculate_transform).and_return(:x=>0.0, :y=>0.0, :w=>3800, :h=>3000, :scale=>1.2)
+      @processor.stub(:target_jpg_quality).and_return(75)
+      @processor.stub(:run_transform)
+    end
+
+    it "should get the image properties from fetch_image_properties and pass the results along with parameters into calculate_transform" do
+      @processor.should_receive(:fetch_image_properties).with('/path/to/image').and_return([640, 480, 'JPG', 'jpg'])
+      @processor.should_receive(:calculate_transform).with('/path/to/image', 640, 480, {w: 5000, h: 5000}, { xf: 0.75, yf: 0.75 })
+      @processor.process('/path/to/image', {w: 5000, h: 5000}, { xf: 0.75, yf: 0.75 })
+    end
+
+    it "should use the width and height returned from calculate_transform to get the target quality of the processed image" do
+      @processor.should_receive(:target_jpg_quality).with(3800, 3000, InsanoImageResizer::Processor::DEFAULT_QUALITY_LIMITS)
+      @processor.process('/path/to/image', {w: 5000, h: 5000}, { xf: 0.75, yf: 0.75 })
+    end
+
+    context "when the target image output is png" do
+      it "should not call target_jpg_quality" do
+        @processor.stub(:fetch_image_properties).and_return([640, 480, 'PNG', 'png'])
+        @processor.should_not_receive(:target_jpg_quality)
+        @processor.process('/path/to/image', {w: 5000, h: 5000}, { xf: 0.75, yf: 0.75 })
+      end
+    end
+
+    it "should pass the various data from the preceding calculations into run_transform" do
+      tempfile = double('tempfile')
+      tempfile.stub(:path).and_return('/path/to/new/image')
+      Tempfile.stub(:new).and_return(tempfile)
+      @processor.should_receive(:run_transform).with('/path/to/image', '/path/to/new/image', { :x=>0.0, :y=>0.0, :w=>3800, :h=>3000, :scale=>1.2 }, 'GIF16', 'jpg', 75)
+      @processor.process('/path/to/image', {w: 5000, h: 5000}, { xf: 0.75, yf: 0.75 })
+    end
+  end
+
+
+  describe "#fetch_image_properties" do
     context "when the image source is a JPEG" do
-      it "should return width, height, quality of the source jpeg, JPEG as the original format, and jpg as the target extension" do
-        width, height, quality, original_format, target_extension = @processor.send(:fetch_image_properties, @source_jpg_path, 90)
+      it "should return width and height of the source jpeg, JPEG as the original format, and jpg as the target extension" do
+        width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_jpg_path)
         width.should == @source_jpg_width
         height.should == @source_jpg_height
-        quality.should == 91
         original_format.should == 'JPEG'
         target_extension.should == 'jpg'
       end
     end
 
     context "when the image source is a PNG" do
-      it "should return width, height, 0 as the quality, PNG as the original format, and png as the target extension" do
-        width, height, quality, original_format, target_extension = @processor.send(:fetch_image_properties, @source_png_path, 90)
-        quality.should == 0
+      it "should return width and height of the source png, PNG as the original format, and png as the target extension" do
+        width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_png_path)
         original_format.should == 'PNG'
         target_extension.should == 'png'
 
-        width, height, quality, original_format, target_extension = @processor.send(:fetch_image_properties, @source_non_transparent_png_path, 90)
-        quality.should == 0
+        width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_non_transparent_png_path)
         original_format.should == 'PNG'
         target_extension.should == 'png'
       end
     end
 
     context "when the image source is not JPEG or PNG" do
-      it "should return width, height, quality argument as the quality, the original format (eg: GIF16) as the original format, and jpg as the target extension" do
-        width, height, quality, original_format, target_extension = @processor.send(:fetch_image_properties, @source_gif_path, 90)
-        quality.should == 90
+      it "should return width and height of the source image, the original format (eg: GIF16) as the original format, and jpg as the target extension" do
+        width, height, original_format, target_extension = @processor.send(:fetch_image_properties, @source_gif_path)
         target_extension.should == 'jpg'
       end
     end
   end
 
-  describe "calculate_transform" do
+
+  describe "#target_jpg_quality" do
+    before(:each) do
+      @limits = { :min_area => { :area => 40000, :quality => 95 },
+                  :max_area => { :area => 1000000, :quality => 60 }}
+    end
+
+    context "an image that is the min area" do
+      it "should get the min_area quality" do
+        @processor.target_jpg_quality(200, 200, @limits).should == 95
+      end
+    end
+
+    context "an image that is the maximum area" do
+      it "should get the max_area quality" do
+        @processor.target_jpg_quality(1000, 1000, @limits).should == 60
+      end
+    end
+
+    context "an image that is smaller than the min area" do
+      it "should get the min_area quality" do
+        @processor.target_jpg_quality(100, 100, @limits).should == 95
+      end
+    end
+
+    context "an image that is between the min and max areas" do
+      it "should be between the min_area and max_area quality specifications" do
+        @processor.target_jpg_quality(640, 480, @limits).should be < 95
+        @processor.target_jpg_quality(640, 480, @limits).should be > 60
+      end
+    end
+
+    context "an image that is larger than the maximum area" do
+      it "should get the max_area quality" do
+        @processor.target_jpg_quality(5000, 5000, @limits).should == 60
+      end
+    end
+
+  end
+
+  describe "#calculate_transform" do
     it "should produce the correct transform for each viewport" do
       expected_abs_index = 0
 
