@@ -36,7 +36,7 @@ Example:
 
 Input parameters:
 
-The `process` method is the main function of the Insano gem. Using different parameters,
+The #process method is the main function of the Insano gem. Using different parameters,
 you can produce a wide range of resized images. Each of the parameters is explained below.
 
 The first argument is an input file path. Because the Insano image resizer uses the VIPS
@@ -50,6 +50,13 @@ the current width and height of the image. Note that the image resizer will
 never distort an image: the output image will always fill the viewport you provide,
 scaling up only if absolutely necessary.
 
+Note that the output image may show more of the source image than you specify using the
+viewport. The region is only meant to indicate what region you'd like to ensure makes
+it into the output. For example, if you have a 200 x 200px image and request an output image of
+100 x 100px, showing the 50px region around 150px x 150px, the output will contain more than
+just that region, since filling a 100px square with a 50px region would require enlarging the
+source image.
+
 The third parameter is the point of interest that you'd like to keep centered if possible.
 Imagine that an 4:3 image contains a person's face on the left side. When you create a
 square thumbnail of the image, the persons face is half chopped off, because the processor
@@ -61,12 +68,18 @@ should be cropped off. However, specifying the optional :region parameter with a
 less than 1, you can make the image resizer zoom in around the POI, cropping the image
 so that an area of size (region * image size) around the POI is visible.
 
-Note that the output image may show more of the source image than you specify using the
-interest region. The region is only meant to indicate what region you'd like to ensure makes
-it into the output. For example, if you have a 200 x 200px image and request an output image of
-100 x 100px, showing the 50px region around 150px x 150px, the output will contain more than
-just that region, since filling a 100px square with a 50px region would require enlarging the
-source image.
+The last optional parameter determines quality. The #process method accepts either a hash or an
+integer. If an integer is provided, then that number will be used when generating all JPEG files.
+A hash of the following form may be used instead:
+
+    { :min_area => { :area => 4000, :quality => 90 },
+                     :max_area => { :area => 1000000, :quality => 60 }}
+
+When a hash is used, images up to the minimum area use the min_area quality. Images at or above the
+maximum area use the max_area quality. Images in between get a quality based on a sliding scale
+between the min and max. This is the default behavior.
+
+Insano accounts for EXIF rotation flags, producing properly oriented images across all devices.
 
 Credits
 =======

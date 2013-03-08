@@ -9,7 +9,7 @@ module InsanoImageResizer
     include Loggable
     include Cocaine
 
-    DEFAULT_QUALITY_LIMITS = { :min_area => { :area => 4000, :quality => 95 },
+    DEFAULT_QUALITY_LIMITS = { :min_area => { :area => 4000, :quality => 90 },
                                :max_area => { :area => 1000000, :quality => 60 }}
 
     def initialize(options = {})
@@ -33,7 +33,7 @@ module InsanoImageResizer
     end
 
     # limits is of the form:
-    # { :min_area => { :area => 4000, :quality => 95 },
+    # { :min_area => { :area => 4000, :quality => 90 },
     #   :max_area => { :area => 1000000, :quality => 60 }}
     def target_jpg_quality(width, height, limits)
       return limits.to_i unless limits.is_a?(Hash)
