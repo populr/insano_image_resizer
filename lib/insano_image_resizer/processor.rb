@@ -20,6 +20,9 @@ module InsanoImageResizer
     def process(input_path, viewport_size = {}, interest_point = {}, quality_limits=DEFAULT_QUALITY_LIMITS)
       width, height, original_format, target_extension = fetch_image_properties(input_path)
 
+      exif_result = handle_exif_rotation(input_path, original_format)
+      width, height = [height, width] if exif_result == :swap_dimensions
+
       output_tmp = Tempfile.new(['img', ".#{target_extension}"])
 
       transform = calculate_transform(input_path, width, height, viewport_size, interest_point)
@@ -33,6 +36,7 @@ module InsanoImageResizer
     # { :min_area => { :area => 4000, :quality => 95 },
     #   :max_area => { :area => 1000000, :quality => 60 }}
     def target_jpg_quality(width, height, limits)
+      return limits.to_i unless limits.is_a?(Hash)
       min_area = limits[:min_area][:area]
       min_area_quality = limits[:min_area][:quality]
       max_area = limits[:max_area][:area]
@@ -190,39 +194,6 @@ module InsanoImageResizer
       end
 
 
-      # find the EXIF values
-      orientation = 0
-      orientation = EXIFR::JPEG.new(input_path).orientation.to_i if original_format == 'JPEG'
-
-      if orientation == 3 || orientation == 6 || orientation == 8
-        o_transform = []
-        if orientation == 3
-          command = 'im_rot180'
-        elsif orientation == 6
-          command = 'im_rot90'
-        elsif orientation == 8
-          command = 'im_rot270'
-        else
-          command = nil
-        end
-
-        if command
-          line = Cocaine::CommandLine.new(@vips_path, ":command :input :intermediate_path")
-          line.run(:input => input_path,
-                   :intermediate_path => "#{intermediate_path}#{intermediate_quality_extension}",
-                   :command => command)
-        end
-
-        # mogrify strips the EXIF tags so that browsers that support EXIF don't rotate again after
-        # we have rotated
-        line = Cocaine::CommandLine.new('mogrify', "-strip :intermediate_path")
-        line.run(:intermediate_path => intermediate_path)
-
-        FileUtils.rm(input_path)
-        FileUtils.mv(intermediate_path, input_path)
-      end
-
-
       if (transform[:scale] < 0.5)
         # If we're shrinking the image by more than a factor of two, let's do a two-pass operation. The reason we do this
         # is that the interpolators, such as bilinear and bicubic, don't produce very good results when scaling an image
@@ -269,8 +240,47 @@ module InsanoImageResizer
 
       FileUtils.rm(input_path)
 
+
       output_path
     end
+
+    def handle_exif_rotation(input_path, original_format)
+      return unless original_format == 'JPEG'
+
+      # find the EXIF values
+      orientation = EXIFR::JPEG.new(input_path).orientation.to_i
+
+      if orientation == 3
+        command = 'im_rot180'
+      elsif orientation == 6
+        command = 'im_rot90'
+        swap_dimensions = true
+      elsif orientation == 8
+        command = 'im_rot270'
+        swap_dimensions = true
+      else
+        return
+      end
+
+      FileUtils.mv(output_path, input_path)
+
+      if command
+        line = Cocaine::CommandLine.new(@vips_path, ":command :input :output")
+        line.run(:input => input_path,
+                 :output => "#{output_path}#{quality_extension}",
+                 :command => command)
+      end
+
+      # mogrify strips the EXIF tags so that browsers that support EXIF don't rotate again after
+      # we have rotated
+      line = Cocaine::CommandLine.new('mogrify', "-strip :output")
+      line.run(:output => output_path)
+
+      FileUtils.rm(input_path)
+      :swap_dimensions if swap_dimensions
+
+    end
+
   end
 end
 

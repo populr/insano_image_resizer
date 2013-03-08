@@ -87,6 +87,7 @@ describe InsanoImageResizer::Processor do
 
   describe "#process" do
     before(:each) do
+      @processor.stub(:handle_exif_rotation)
       @processor.stub(:fetch_image_properties).and_return([640, 480, 'GIF16', 'jpg'])
       @processor.stub(:calculate_transform).and_return(:x=>0.0, :y=>0.0, :w=>3800, :h=>3000, :scale=>1.2)
       @processor.stub(:target_jpg_quality).and_return(75)
@@ -118,6 +119,14 @@ describe InsanoImageResizer::Processor do
       Tempfile.stub(:new).and_return(tempfile)
       @processor.should_receive(:run_transform).with('/path/to/image', '/path/to/new/image', { :x=>0.0, :y=>0.0, :w=>3800, :h=>3000, :scale=>1.2 }, 'GIF16', 'jpg', 75)
       @processor.process('/path/to/image', {w: 5000, h: 5000}, { xf: 0.75, yf: 0.75 })
+    end
+
+    context "when #handle_exif_rotation returns :swap_dimensions" do
+      it "should swap the width and height" do
+        @processor.stub(:handle_exif_rotation).and_return(:swap_dimensions)
+        @processor.should_receive(:calculate_transform).with('/path/to/image', 480, 640, {w: 5000, h: 5000}, { xf: 0.75, yf: 0.75 })
+        @processor.process('/path/to/image', {w: 5000, h: 5000}, { xf: 0.75, yf: 0.75 })
+      end
     end
   end
 
@@ -188,6 +197,18 @@ describe InsanoImageResizer::Processor do
     context "an image that is larger than the maximum area" do
       it "should get the max_area quality" do
         @processor.target_jpg_quality(5000, 5000, @limits).should == 60
+      end
+    end
+
+    context "when the limit passed is an integer" do
+      it "should return the integer" do
+        @processor.target_jpg_quality(100, 100, 75).should == 75
+      end
+    end
+
+    context "when the limit passed is a float" do
+      it "should return the number as an integer" do
+        @processor.target_jpg_quality(100, 100, 75.2).should == 75
       end
     end
 
