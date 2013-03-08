@@ -73,7 +73,7 @@ integer. If an integer is provided, then that number will be used when generatin
 A hash of the following form may be used instead:
 
     { :min_area => { :area => 4000, :quality => 90 },
-                     :max_area => { :area => 1000000, :quality => 60 }}
+                     :max_area => { :area => 1000000, :quality => 70 }}
 
 When a hash is used, images up to the minimum area use the min_area quality. Images at or above the
 maximum area use the max_area quality. Images in between get a quality based on a sliding scale

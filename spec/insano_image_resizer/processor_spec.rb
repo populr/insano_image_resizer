@@ -166,7 +166,7 @@ describe InsanoImageResizer::Processor do
   describe "#target_jpg_quality" do
     before(:each) do
       @limits = { :min_area => { :area => 40000, :quality => 90 },
-                  :max_area => { :area => 1000000, :quality => 60 }}
+                  :max_area => { :area => 1000000, :quality => 70 }}
     end
 
     context "an image that is the min area" do
@@ -177,7 +177,7 @@ describe InsanoImageResizer::Processor do
 
     context "an image that is the maximum area" do
       it "should get the max_area quality" do
-        @processor.target_jpg_quality(1000, 1000, @limits).should == 60
+        @processor.target_jpg_quality(1000, 1000, @limits).should == 70
       end
     end
 
@@ -190,13 +190,13 @@ describe InsanoImageResizer::Processor do
     context "an image that is between the min and max areas" do
       it "should be between the min_area and max_area quality specifications" do
         @processor.target_jpg_quality(640, 480, @limits).should be < 90
-        @processor.target_jpg_quality(640, 480, @limits).should be > 60
+        @processor.target_jpg_quality(640, 480, @limits).should be > 70
       end
     end
 
     context "an image that is larger than the maximum area" do
       it "should get the max_area quality" do
-        @processor.target_jpg_quality(5000, 5000, @limits).should == 60
+        @processor.target_jpg_quality(5000, 5000, @limits).should == 70
       end
     end
 

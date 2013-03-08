@@ -34,7 +34,7 @@ module InsanoImageResizer
 
     # limits is of the form:
     # { :min_area => { :area => 4000, :quality => 90 },
-    #   :max_area => { :area => 1000000, :quality => 60 }}
+    #   :max_area => { :area => 1000000, :quality => 70 }}
     def target_jpg_quality(width, height, limits)
       return limits.to_i unless limits.is_a?(Hash)
       min_area = limits[:min_area][:area]
