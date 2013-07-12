@@ -29,7 +29,7 @@ module InsanoImageResizer
       quality = target_jpg_quality(transform[:w], transform[:h], quality_limits) if target_extension == 'jpg'
       run_transform(input_path, output_tmp.path, transform, original_format, target_extension, quality)
 
-      output_tmp.path
+      output_tmp
     end
 
     # limits is of the form:
